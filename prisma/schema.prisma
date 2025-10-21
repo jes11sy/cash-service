@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Cash transactions
+model Cash {
+  id                Int       @id @default(autoincrement())
+  orderId           Int       @unique
+  amount            Int
+  type              String    // 'расход', 'предоплата', 'чистый'
+  status            String    // 'pending', 'approved', 'rejected'
+  submittedBy       Int?      // Кто подал заявку (Master ID)
+  approvedBy        Int?      // Кто утвердил (Director ID)
+  approvedDate      DateTime?
+  receiptDoc        String?   // Ссылка на чек
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  note              String?
+  
+  order             Order     @relation(fields: [orderId], references: [id])
+  submitter         Master?   @relation("CashSubmitter", fields: [submittedBy], references: [id])
+  approver          Director? @relation("CashApprover", fields: [approvedBy], references: [id])
+  
+  @@map("cash")
+}
+
+// Master handover (сдача мастеров)
+model MasterHandover {
+  id                Int       @id @default(autoincrement())
+  masterId          Int
+  period            String    // 'daily', 'weekly', 'monthly'
+  periodStart       DateTime
+  periodEnd         DateTime
+  totalAmount       Int       // Общая сумма к сдаче
+  totalOrders       Int       // Количество заказов
+  status            String    // 'pending', 'submitted', 'approved', 'rejected'
+  submittedDate     DateTime?
+  approvedBy        Int?
+  approvedDate      DateTime?
+  note              String?
+  createdAt         DateTime  @default(now())
+  
+  master            Master    @relation(fields: [masterId], references: [id])
+  approver          Director? @relation("HandoverApprover", fields: [approvedBy], references: [id])
+  
+  @@map("master_handover")
+}
+
+// Related models
+model Order {
+  id                    Int       @id @default(autoincrement())
+  rk                    String
+  city                  String
+  avitoName             String?
+  phone                 String
+  typeOrder             String
+  clientName            String
+  address               String
+  dateMeeting           String
+  typeEquipment         String
+  problem               String
+  callRecord            String?
+  statusOrder           String
+  masterId              Int?
+  result                Int?
+  expenditure           Int?
+  clean                 Int?
+  masterChange          Int?
+  bsoDoc                String?
+  expenditureDoc        String?
+  operatorNameId        Int
+  createDate            DateTime  @default(now())
+  closingData           String?
+  avitoChatId           String?
+  callId                String?
+  prepayment            Int?
+  dateClosmod           String?
+  comment               String?
+  cashSubmissionStatus  String?
+  cashSubmissionDate    DateTime?
+  cashSubmissionAmount  Int?
+  cashReceiptDoc        String?
+  cashApprovedBy        Int?
+  cashApprovedDate      DateTime?
+  directorId            Int?
+  callcentreAdminId     Int?
+  callcentreOperatorId  Int?
+  
+  master                Master?              @relation(fields: [masterId], references: [id])
+  director              Director?            @relation(fields: [directorId], references: [id])
+  cash                  Cash?
+  
+  @@map("order")
+}
+
+model Master {
+  id             Int       @id @default(autoincrement())
+  name           String
+  login          String?   @unique
+  password       String?
+  phone          String?
+  cities         String[]  @default([])
+  statusWork     String?
+  dateCreate     DateTime  @default(now())
+  note           String?
+  contractDoc    String?
+  passportDoc    String?
+  
+  orders         Order[]
+  cashSubmissions Cash[]   @relation("CashSubmitter")
+  handovers      MasterHandover[]
+  
+  @@map("master")
+}
+
+model Director {
+  id             Int       @id @default(autoincrement())
+  name           String
+  login          String    @unique
+  password       String
+  city           String?
+  statusWork     String?
+  dateCreate     DateTime  @default(now())
+  note           String?
+  contractDoc    String?
+  passportDoc    String?
+  
+  orders         Order[]
+  cashApprovals  Cash[]    @relation("CashApprover")
+  handoverApprovals MasterHandover[] @relation("HandoverApprover")
+  
+  @@map("director")
+}
+
