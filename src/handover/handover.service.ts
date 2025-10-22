@@ -37,7 +37,6 @@ export class HandoverService {
           select: {
             id: true,
             name: true,
-            phone: true,
           },
         },
         approver: {
@@ -63,7 +62,6 @@ export class HandoverService {
           select: {
             id: true,
             name: true,
-            phone: true,
           },
         },
         approver: {

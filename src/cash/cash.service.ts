@@ -72,7 +72,6 @@ export class CashService {
           select: {
             id: true,
             name: true,
-            phone: true,
           },
         },
         approver: {
