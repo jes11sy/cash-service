@@ -42,8 +42,8 @@ export class CashController {
   @Post()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.MASTER)
-  @ApiOperation({ summary: 'Create cash transaction (submit for approval)' })
+  @Roles(UserRole.DIRECTOR, UserRole.MASTER)
+  @ApiOperation({ summary: 'Create cash transaction' })
   async createCash(@Body() dto: CreateCashDto, @Request() req: any) {
     return this.cashService.createCash(dto, req.user);
   }
@@ -51,29 +51,12 @@ export class CashController {
   @Put(':id')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.MASTER)
+  @Roles(UserRole.DIRECTOR, UserRole.MASTER)
   @ApiOperation({ summary: 'Update cash transaction' })
   async updateCash(@Param('id') id: string, @Body() dto: UpdateCashDto) {
     return this.cashService.updateCash(+id, dto);
   }
 
-  @Patch(':id/approve')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @ApiBearerAuth()
-  @Roles(UserRole.DIRECTOR)
-  @ApiOperation({ summary: 'Approve/reject cash transaction' })
-  async approveCash(@Param('id') id: string, @Body() dto: ApproveCashDto, @Request() req: any) {
-    return this.cashService.approveCash(+id, dto, req.user);
-  }
-
-  @Get('balance/:masterId')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @ApiBearerAuth()
-  @Roles(UserRole.DIRECTOR, UserRole.MASTER)
-  @ApiOperation({ summary: 'Get master balance' })
-  async getMasterBalance(@Param('masterId') masterId: string) {
-    return this.cashService.getMasterBalance(+masterId);
-  }
 }
 
 

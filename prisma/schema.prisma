@@ -9,23 +9,19 @@ datasource db {
 
 // Cash transactions
 model Cash {
-  id                Int       @id @default(autoincrement())
-  orderId           Int       @unique
-  amount            Int
-  type              String    // 'расход', 'предоплата', 'чистый'
-  status            String    // 'pending', 'approved', 'rejected'
-  submittedBy       Int?      // Кто подал заявку (Master ID)
-  approvedBy        Int?      // Кто утвердил (Director ID)
-  approvedDate      DateTime?
-  receiptDoc        String?   // Ссылка на чек
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  note              String?
-  
-  order             Order     @relation(fields: [orderId], references: [id])
-  submitter         Master?   @relation("CashSubmitter", fields: [submittedBy], references: [id])
-  approver          Director? @relation("CashApprover", fields: [approvedBy], references: [id])
-  
+  id             Int      @id @default(autoincrement())
+  name           String   // "приход" или "расход"
+  amount         Decimal  @db.Decimal(10, 2)
+  city           String?  @default("Москва")
+  note           String?
+  receiptDoc     String?  @map("receipt_doc")
+  paymentPurpose String?  @map("payment_purpose") // назначение платежа
+  dateCreate     DateTime @default(now()) @map("date_create")
+  nameCreate     String   @map("name_create")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([name, city])
   @@map("cash")
 }
 

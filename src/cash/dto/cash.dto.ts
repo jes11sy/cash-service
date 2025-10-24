@@ -2,18 +2,24 @@ import { IsString, IsNumber, IsOptional, IsIn } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateCashDto {
-  @ApiProperty()
-  @IsNumber()
-  orderId: number;
+  @ApiProperty({ enum: ['приход', 'расход'] })
+  @IsString()
+  @IsIn(['приход', 'расход'])
+  name: string;
 
   @ApiProperty()
   @IsNumber()
   amount: number;
 
-  @ApiProperty({ enum: ['расход', 'предоплата', 'чистый'] })
+  @ApiProperty({ required: false })
   @IsString()
-  @IsIn(['расход', 'предоплата', 'чистый'])
-  type: string;
+  @IsOptional()
+  city?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  note?: string;
 
   @ApiProperty({ required: false })
   @IsString()
@@ -23,7 +29,7 @@ export class CreateCashDto {
   @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
-  note?: string;
+  paymentPurpose?: string;
 }
 
 export class UpdateCashDto {
@@ -32,10 +38,20 @@ export class UpdateCashDto {
   @IsOptional()
   amount?: number;
 
-  @ApiProperty({ required: false, enum: ['расход', 'предоплата', 'чистый'] })
+  @ApiProperty({ required: false, enum: ['приход', 'расход'] })
   @IsString()
   @IsOptional()
-  type?: string;
+  name?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  city?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  note?: string;
 
   @ApiProperty({ required: false })
   @IsString()
@@ -45,7 +61,7 @@ export class UpdateCashDto {
   @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
-  note?: string;
+  paymentPurpose?: string;
 }
 
 export class ApproveCashDto {
