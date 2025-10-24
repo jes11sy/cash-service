@@ -12,12 +12,12 @@ export class HandoverService {
     const where: any = {};
 
     // Если это мастер - показываем только его сдачи
-    if (user.role === 'MASTER') {
+    if (user.role === 'master') {
       where.masterId = user.userId;
     }
 
     // Если директор может фильтровать по мастеру
-    if (user.role === 'DIRECTOR' && masterId) {
+    if (user.role === 'director' && masterId) {
       where.masterId = +masterId;
     }
 
