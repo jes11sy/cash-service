@@ -7,10 +7,16 @@ export class CashService {
   constructor(private prisma: PrismaService) {}
 
   async getCashTransactions(query: any, user: any) {
-    const { name, city } = query;
+    const { name, city, type } = query;
 
     const where: any = {};
 
+    // Фильтрация по типу транзакции (приход/расход) через параметр type
+    if (type) {
+      where.name = type;
+    }
+
+    // Фильтрация по названию (для обратной совместимости)
     if (name) {
       where.name = name;
     }
