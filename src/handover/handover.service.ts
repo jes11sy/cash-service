@@ -22,11 +22,10 @@ export class HandoverService {
 
     // Фильтр по статусу сдачи
     if (status && status !== 'all') {
-      if (status === 'not_submitted') {
-        where.cashSubmissionStatus = { in: [null, 'not_submitted'] };
-      } else {
-        where.cashSubmissionStatus = status;
-      }
+      where.cashSubmissionStatus = status;
+    } else {
+      // Показываем только русские статусы, исключаем not_submitted и null
+      where.cashSubmissionStatus = { in: ['Не отправлено', 'На проверке', 'Одобрено', 'Отклонено'] };
     }
 
     const orders = await this.prisma.order.findMany({
