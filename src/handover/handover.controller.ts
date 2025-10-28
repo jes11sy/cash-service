@@ -12,7 +12,7 @@ export class HandoverController {
   @Get()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.MASTER)
+  @Roles(UserRole.master)
   @ApiOperation({ summary: 'Get master cash submissions' })
   async getMasterCashSubmissions(@Query() query: any, @Request() req: any) {
     return this.handoverService.getMasterCashSubmissions(query, req.user);
