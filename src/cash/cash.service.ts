@@ -52,7 +52,38 @@ export class CashService {
   }
 
   async createCash(dto: CreateCashDto, user: any) {
-    const transaction = await this.prisma.cash.create({
+    // Проверяем, есть ли уже запись для этого заказа
+    let transaction;
+    
+    if (dto.paymentPurpose) {
+      const existing = await this.prisma.cash.findFirst({
+        where: { paymentPurpose: dto.paymentPurpose },
+      });
+
+      if (existing) {
+        // Обновляем существующую запись
+        transaction = await this.prisma.cash.update({
+          where: { id: existing.id },
+          data: {
+            name: dto.name,
+            amount: dto.amount,
+            city: dto.city,
+            note: dto.note,
+            receiptDoc: dto.receiptDoc,
+            dateCreate: new Date(), // Обновляем дату
+          },
+        });
+
+        return {
+          success: true,
+          message: 'Cash transaction updated successfully',
+          data: transaction,
+        };
+      }
+    }
+
+    // Создаем новую запись
+    transaction = await this.prisma.cash.create({
       data: {
         name: dto.name,
         amount: dto.amount,
