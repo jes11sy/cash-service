@@ -5,26 +5,111 @@ import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify
 import { AppModule } from './app.module';
 
 async function bootstrap() {
+  // 📝 Настройка логирования с фильтрацией чувствительных данных
+  const fastifyLogger = {
+    level: process.env.LOG_LEVEL || 'info',
+    serializers: {
+      req(request) {
+        return {
+          method: request.method,
+          url: request.url,
+          hostname: request.hostname,
+          remoteAddress: request.ip,
+          // Фильтруем чувствительные заголовки
+          headers: {
+            ...request.headers,
+            authorization: request.headers.authorization ? '[REDACTED]' : undefined,
+            cookie: request.headers.cookie ? '[REDACTED]' : undefined,
+          },
+        };
+      },
+      res(reply) {
+        return {
+          statusCode: reply.statusCode,
+        };
+      },
+    },
+    redact: {
+      paths: [
+        'req.headers.authorization',
+        'req.headers.cookie',
+        'req.body.password',
+        'req.body.token',
+        '*.password',
+        '*.token',
+        '*.secret',
+      ],
+      remove: true,
+    },
+  };
+
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({ logger: false, trustProxy: true }),
+    new FastifyAdapter({ 
+      logger: fastifyLogger,
+      trustProxy: true,
+      requestIdHeader: 'x-request-id',
+      requestIdLogLabel: 'reqId',
+    }),
   );
 
   const logger = new Logger('CashService');
 
+  // 🔒 CORS с безопасными настройками
   await app.register(require('@fastify/cors'), {
-    origin: process.env.CORS_ORIGIN?.split(',') || true,
+    origin: process.env.CORS_ORIGIN?.split(',') || ['https://yourdomain.com'],
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    maxAge: 86400, // 24 hours
   });
 
+  // 🔒 Улучшенные Security Headers
   await app.register(require('@fastify/helmet'), {
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"], // Для Swagger UI
+        scriptSrc: ["'self'"],
+        imgSrc: ["'self'", 'data:', 'https:'],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        frameSrc: ["'none'"],
+      },
+    },
+    crossOriginEmbedderPolicy: true,
+    crossOriginOpenerPolicy: { policy: 'same-origin' },
+    crossOriginResourcePolicy: { policy: 'same-origin' },
+    dnsPrefetchControl: { allow: false },
+    frameguard: { action: 'deny' },
+    hidePoweredBy: true,
+    hsts: {
+      maxAge: 31536000, // 1 year
+      includeSubDomains: true,
+      preload: true,
+    },
+    ieNoOpen: true,
+    noSniff: true,
+    originAgentCluster: true,
+    permittedCrossDomainPolicies: { permittedPolicies: 'none' },
+    referrerPolicy: { policy: 'no-referrer' },
+    xssFilter: true,
   });
 
+  // 🔒 Валидация с подробными ошибками (без раскрытия чувствительной информации)
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       transform: true,
+      forbidNonWhitelisted: true,
+      forbidUnknownValues: true,
+      disableErrorMessages: process.env.NODE_ENV === 'production' ? true : false,
+      validationError: {
+        target: false, // Не включаем объект в ошибку (может содержать чувствительные данные)
+        value: false,  // Не включаем значение в ошибку
+      },
     }),
   );
 

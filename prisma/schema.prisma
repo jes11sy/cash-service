@@ -15,13 +15,18 @@ model Cash {
   city           String?  @default("Москва")
   note           String?
   receiptDoc     String?  @map("receipt_doc")
-  paymentPurpose String?  @map("payment_purpose") // назначение платежа
+  paymentPurpose String?  @unique @map("payment_purpose") // назначение платежа - уникальное для предотвращения дубликатов
   dateCreate     DateTime @default(now()) @map("date_create")
   nameCreate     String   @map("name_create")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  @@index([name, city])
+  // 🚀 Индексы производительности
+  @@index([name, city]) // Существующий индекс
+  @@index([nameCreate, dateCreate(sort: Desc)]) // Для поиска транзакций пользователя
+  @@index([city, dateCreate(sort: Desc)]) // Для фильтрации по городу с сортировкой
+  @@index([dateCreate(sort: Desc)]) // Для общей сортировки по дате
+  @@index([name, dateCreate(sort: Desc)]) // Для фильтрации по типу с сортировкой
   @@map("cash")
 }
 
@@ -84,6 +89,12 @@ model Order {
   cashApprovedDate      DateTime?          @map("cash_approved_date")
   master                Master?            @relation(fields: [masterId], references: [id])
 
+  // 🚀 Индексы производительности для handover
+  @@index([masterId, statusOrder]) // Для поиска заказов мастера по статусу
+  @@index([masterId, cashSubmissionStatus]) // Для фильтрации сдач мастера
+  @@index([closingData(sort: Desc)]) // Для сортировки по дате закрытия
+  @@index([masterId, statusOrder, cashSubmissionStatus]) // Комбинированный индекс для handover
+  @@index([statusOrder, closingData(sort: Desc)]) // Для админов
   @@map("orders")
 }
 
