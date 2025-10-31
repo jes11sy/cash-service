@@ -85,8 +85,9 @@ export class CashService {
     try {
       // Используем транзакцию для предотвращения Race Condition
       const result = await this.prisma.$transaction(async (tx) => {
-        // Если указано назначение платежа, проверяем дубликаты
-        if (dto.paymentPurpose) {
+        // Проверяем дубликаты только для конкретных заказов (формат "Заказ №123")
+        // Общие категории ("Заказ", "Депозит" и т.д.) не проверяем
+        if (dto.paymentPurpose && /Заказ №\d+/.test(dto.paymentPurpose)) {
           const existing = await tx.cash.findFirst({
             where: { paymentPurpose: dto.paymentPurpose },
           });
