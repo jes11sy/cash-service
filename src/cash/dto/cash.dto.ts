@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, IsIn, Min, Max, IsPositive, IsUrl, MaxLength, Matches } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsIn, Min, Max, IsPositive, MaxLength, Matches } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -33,12 +33,12 @@ export class CreateCashDto {
 
   @ApiProperty({ 
     required: false,
-    example: 'https://storage.example.com/receipts/uuid-v4.pdf',
-    description: 'URL документа/чека (только HTTPS, только PDF/JPG/PNG)'
+    example: 'director/cash/receipt_doc/uuid-v4.pdf',
+    description: 'S3 ключ или URL документа/чека (PDF/JPG/PNG)'
   })
   @IsOptional()
-  @IsUrl({ protocols: ['https'], require_protocol: true }, { message: 'Должен быть валидный HTTPS URL' })
-  @MaxLength(500, { message: 'URL не может быть длиннее 500 символов' })
+  @IsString()
+  @MaxLength(500, { message: 'Путь не может быть длиннее 500 символов' })
   @Matches(/\.(pdf|jpg|jpeg|png)$/i, { message: 'Разрешены только файлы: PDF, JPG, PNG' })
   receiptDoc?: string;
 
@@ -81,10 +81,10 @@ export class UpdateCashDto {
 
   @ApiProperty({ 
     required: false,
-    example: 'https://storage.example.com/receipts/uuid-v4.pdf'
+    example: 'director/cash/receipt_doc/uuid-v4.pdf'
   })
   @IsOptional()
-  @IsUrl({ protocols: ['https'], require_protocol: true })
+  @IsString()
   @MaxLength(500)
   @Matches(/\.(pdf|jpg|jpeg|png)$/i)
   receiptDoc?: string;
