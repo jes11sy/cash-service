@@ -83,25 +83,8 @@ export class CashService {
     }
 
     try {
-      // Используем транзакцию для предотвращения Race Condition
+      // Создаем новую запись (без проверки дубликатов - разрешаем множественные транзакции)
       const result = await this.prisma.$transaction(async (tx) => {
-        // Проверяем дубликаты только для конкретных заказов (формат "Заказ №123")
-        // Общие категории ("Заказ", "Депозит" и т.д.) не проверяем
-        if (dto.paymentPurpose && /Заказ №\d+/.test(dto.paymentPurpose)) {
-          const existing = await tx.cash.findFirst({
-            where: { paymentPurpose: dto.paymentPurpose },
-          });
-
-          if (existing) {
-            // ВАЖНО: Не обновляем автоматически! Это может привести к потере данных
-            // Вместо этого возвращаем ошибку конфликта
-            throw new ConflictException(
-              `Транзакция с назначением платежа "${dto.paymentPurpose}" уже существует (ID: ${existing.id})`
-            );
-          }
-        }
-
-        // Создаем новую запись
         const transaction = await tx.cash.create({
           data: {
             name: dto.name,
