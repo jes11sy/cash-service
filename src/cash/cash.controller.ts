@@ -26,7 +26,7 @@ export class CashController {
   @Get()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.director, UserRole.master, UserRole.callcentre_admin)
+  @Roles(UserRole.admin, UserRole.director, UserRole.master, UserRole.callcentre_admin)
   @ApiOperation({ summary: 'Get all cash transactions with pagination' })
   @ApiResponse({ status: 200, description: 'Transactions retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -40,7 +40,7 @@ export class CashController {
   @Get(':id')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.director, UserRole.master, UserRole.callcentre_admin)
+  @Roles(UserRole.admin, UserRole.director, UserRole.master, UserRole.callcentre_admin)
   @ApiOperation({ summary: 'Get cash transaction by ID with IDOR protection' })
   @ApiResponse({ status: 200, description: 'Transaction retrieved successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden - Access denied' })
@@ -55,6 +55,7 @@ export class CashController {
     // Директор может видеть все транзакции
     // Мастер только свои
     if (
+      req.user.role !== UserRole.admin &&
       req.user.role !== UserRole.director &&
       req.user.role !== UserRole.callcentre_admin &&
       transaction.data.nameCreate !== req.user.name
@@ -68,7 +69,7 @@ export class CashController {
   @Post()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.director, UserRole.master, UserRole.operator, UserRole.callcentre_operator, UserRole.callcentre_admin)
+  @Roles(UserRole.admin, UserRole.director, UserRole.master, UserRole.operator, UserRole.callcentre_operator, UserRole.callcentre_admin)
   @ApiOperation({ summary: 'Create cash transaction with validation' })
   @ApiResponse({ status: 201, description: 'Transaction created successfully' })
   @ApiResponse({ status: 400, description: 'Bad Request - Validation failed' })
@@ -83,7 +84,7 @@ export class CashController {
   @Put(':id')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.director, UserRole.master, UserRole.callcentre_admin)
+  @Roles(UserRole.admin, UserRole.director, UserRole.master, UserRole.callcentre_admin)
   @ApiOperation({ summary: 'Update cash transaction with IDOR protection' })
   @ApiResponse({ status: 200, description: 'Transaction updated successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden - Access denied' })
@@ -97,6 +98,7 @@ export class CashController {
     const transaction = await this.cashService.getCashTransaction(id);
     
     if (
+      req.user.role !== UserRole.admin &&
       req.user.role !== UserRole.director &&
       req.user.role !== UserRole.callcentre_admin &&
       transaction.data.nameCreate !== req.user.name

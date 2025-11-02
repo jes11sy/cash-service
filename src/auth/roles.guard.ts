@@ -2,6 +2,7 @@ import { Injectable, CanActivate, ExecutionContext, SetMetadata } from '@nestjs/
 import { Reflector } from '@nestjs/core';
 
 export enum UserRole {
+  admin = 'admin',
   master = 'master',
   director = 'director',
   callcentre_admin = 'callcentre_admin',
