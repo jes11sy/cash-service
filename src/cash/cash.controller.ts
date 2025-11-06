@@ -52,14 +52,21 @@ export class CashController {
     const transaction = await this.cashService.getCashTransaction(id);
     
     // 🔒 IDOR Protection: Проверяем права доступа
-    // Директор может видеть все транзакции
-    // Мастер только свои
-    if (
-      req.user.role !== UserRole.admin &&
-      req.user.role !== UserRole.director &&
-      req.user.role !== UserRole.callcentre_admin &&
-      transaction.data.nameCreate !== req.user.name
-    ) {
+    // Админ может видеть все транзакции
+    if (req.user.role === UserRole.admin || req.user.role === UserRole.callcentre_admin) {
+      return transaction;
+    }
+
+    // Директор может видеть только транзакции из своих городов
+    if (req.user.role === UserRole.director) {
+      if (req.user.cities && req.user.cities.length > 0 && !req.user.cities.includes(transaction.data.city)) {
+        throw new ForbiddenException('У вас нет доступа к этой транзакции');
+      }
+      return transaction;
+    }
+
+    // Мастер может видеть только свои транзакции
+    if (transaction.data.nameCreate !== req.user.name) {
       throw new ForbiddenException('У вас нет доступа к этой транзакции');
     }
 

@@ -25,7 +25,24 @@ export class CashService {
       where.name = name;
     }
 
-    if (city) {
+    // Фильтрация по городам пользователя (для директоров и не-админов)
+    if (user.role !== 'admin' && user.cities && user.cities.length > 0) {
+      // Если передан параметр city, проверяем, что он входит в список городов пользователя
+      if (city) {
+        if (user.cities.includes(city)) {
+          where.city = city;
+        } else {
+          // Если пользователь пытается получить данные не из своего города - возвращаем пустой результат
+          where.city = null;
+        }
+      } else {
+        // Если city не передан, показываем все города пользователя
+        where.city = {
+          in: user.cities
+        };
+      }
+    } else if (city) {
+      // Для админов - просто применяем фильтр по городу если он передан
       where.city = city;
     }
 
@@ -82,6 +99,14 @@ export class CashService {
       throw new BadRequestException('Недопустимая сумма транзакции');
     }
 
+    // Проверка прав доступа к городу (для не-админов)
+    const city = dto.city || 'Москва';
+    if (user.role !== 'admin' && user.cities && user.cities.length > 0) {
+      if (!user.cities.includes(city)) {
+        throw new ForbiddenException(`У вас нет доступа к городу ${city}`);
+      }
+    }
+
     try {
       // Создаем новую запись (без проверки дубликатов - разрешаем множественные транзакции)
       const result = await this.prisma.$transaction(async (tx) => {
@@ -89,7 +114,7 @@ export class CashService {
           data: {
             name: dto.name,
             amount: dto.amount,
-            city: dto.city || 'Москва',
+            city,
             note: dto.note,
             receiptDoc: dto.receiptDoc,
             paymentPurpose: dto.paymentPurpose,
@@ -126,6 +151,18 @@ export class CashService {
 
     if (!transaction) {
       throw new NotFoundException('Cash transaction not found');
+    }
+
+    // Проверка прав доступа (для не-админов)
+    if (user.role !== 'admin' && user.cities && user.cities.length > 0) {
+      // Проверяем, что текущий город транзакции доступен пользователю
+      if (!user.cities.includes(transaction.city)) {
+        throw new ForbiddenException('У вас нет доступа к этой транзакции');
+      }
+      // Если меняется город, проверяем, что новый город тоже доступен
+      if (dto.city && !user.cities.includes(dto.city)) {
+        throw new ForbiddenException(`У вас нет доступа к городу ${dto.city}`);
+      }
     }
 
     // Дополнительная валидация суммы
