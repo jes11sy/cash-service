@@ -62,7 +62,7 @@ Authorization: Bearer <token>
 
 **Query параметры**:
 - `page` (optional, default: 1) - номер страницы
-- `limit` (optional, default: 50, max: 100) - количество записей
+- `limit` (optional, default: 50, max: 10000) - количество записей
 - `type` (optional) - тип транзакции: "приход" или "расход"
 - `city` (optional) - город
 - `name` (optional) - название (для обратной совместимости)

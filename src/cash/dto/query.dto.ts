@@ -51,7 +51,7 @@ export class GetCashQueryDto {
   @ApiProperty({ 
     required: false, 
     minimum: 1,
-    maximum: 100,
+    maximum: 10000,
     default: 50,
     description: 'Количество записей на странице' 
   })
@@ -59,7 +59,7 @@ export class GetCashQueryDto {
   @Type(() => Number)
   @IsInt({ message: 'Лимит должен быть целым числом' })
   @Min(1, { message: 'Минимальный лимит: 1' })
-  @Max(100, { message: 'Максимальный лимит: 100' })
+  @Max(10000, { message: 'Максимальный лимит: 10000' })
   limit?: number;
 }
 
