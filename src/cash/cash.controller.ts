@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Put, Patch, Body, Param, Query, UseGuards, Request, HttpCode, HttpStatus, ParseIntPipe, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
+import { CookieJwtAuthGuard } from '../auth/guards/cookie-jwt-auth.guard';
 import { CashService } from './cash.service';
 import { CreateCashDto, UpdateCashDto, ApproveCashDto } from './dto/cash.dto';
 import { GetCashQueryDto } from './dto/query.dto';
@@ -24,7 +24,7 @@ export class CashController {
   }
 
   @Get()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
   @Roles(UserRole.admin, UserRole.director, UserRole.master, UserRole.callcentre_admin)
   @ApiOperation({ summary: 'Get all cash transactions with pagination' })
@@ -38,7 +38,7 @@ export class CashController {
   }
 
   @Get(':id')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
   @Roles(UserRole.admin, UserRole.director, UserRole.master, UserRole.callcentre_admin)
   @ApiOperation({ summary: 'Get cash transaction by ID with IDOR protection' })
@@ -74,7 +74,7 @@ export class CashController {
   }
 
   @Post()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
   @Roles(UserRole.admin, UserRole.director, UserRole.master, UserRole.operator, UserRole.callcentre_operator, UserRole.callcentre_admin)
   @ApiOperation({ summary: 'Create cash transaction with validation' })
@@ -89,7 +89,7 @@ export class CashController {
   }
 
   @Put(':id')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
   @Roles(UserRole.admin, UserRole.director, UserRole.master, UserRole.callcentre_admin)
   @ApiOperation({ summary: 'Update cash transaction with IDOR protection' })

@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Query, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
+import { CookieJwtAuthGuard } from '../auth/guards/cookie-jwt-auth.guard';
 import { HandoverService } from './handover.service';
 import { RolesGuard, Roles, UserRole } from '../auth/roles.guard';
 import { GetHandoverQueryDto } from '../cash/dto/query.dto';
@@ -12,7 +12,7 @@ export class HandoverController {
   constructor(private handoverService: HandoverService) {}
 
   @Get()
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
   @Roles(UserRole.master)
   @ApiOperation({ summary: 'Get master cash submissions with pagination' })
