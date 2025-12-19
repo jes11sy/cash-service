@@ -55,12 +55,24 @@ async function bootstrap() {
 
   const logger = new Logger('CashService');
 
+  // 🍪 РЕГИСТРАЦИЯ COOKIE PLUGIN (до CORS!)
+  await app.register(require('@fastify/cookie'), {
+    secret: process.env.COOKIE_SECRET || process.env.JWT_SECRET,
+  });
+  logger.log('✅ Cookie plugin registered');
+
   // 🔒 CORS с безопасными настройками
   await app.register(require('@fastify/cors'), {
     origin: process.env.CORS_ORIGIN?.split(',') || ['https://yourdomain.com'],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Accept',
+      'Origin',
+      'X-Use-Cookies', // 🍪 Поддержка cookie mode
+    ],
     maxAge: 86400, // 24 hours
   });
 
