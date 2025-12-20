@@ -28,10 +28,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Invalid token payload');
     }
 
+    // 🔍 DEBUG: Логируем payload для отладки
+    console.log('🔍 [JwtStrategy] Validating payload:', {
+      userId: payload.sub,
+      role: payload.role,
+      roleType: typeof payload.role,
+      cities: payload.cities,
+    });
+
     return {
       userId: payload.sub,
       login: payload.login,
-      role: payload.role,
+      role: payload.role as any, // Приводим к any, т.к. из JWT всегда приходит строка
       name: payload.name,
       cities: payload.cities || [],
     };
