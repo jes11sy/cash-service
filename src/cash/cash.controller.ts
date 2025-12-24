@@ -26,7 +26,7 @@ export class CashController {
   @Get()
   @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.admin, UserRole.director, UserRole.master, UserRole.callcentre_admin, UserRole.callcentre_operator)
+  @Roles(UserRole.admin, UserRole.director, UserRole.master, UserRole.callcentre_admin, UserRole.callcentre_operator, UserRole.operator)
   @ApiOperation({ summary: 'Get all cash transactions with pagination' })
   @ApiResponse({ status: 200, description: 'Transactions retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -40,7 +40,7 @@ export class CashController {
   @Get(':id')
   @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.admin, UserRole.director, UserRole.master, UserRole.callcentre_admin, UserRole.callcentre_operator)
+  @Roles(UserRole.admin, UserRole.director, UserRole.master, UserRole.callcentre_admin, UserRole.callcentre_operator, UserRole.operator)
   @ApiOperation({ summary: 'Get cash transaction by ID with IDOR protection' })
   @ApiResponse({ status: 200, description: 'Transaction retrieved successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden - Access denied' })
@@ -91,7 +91,7 @@ export class CashController {
   @Put(':id')
   @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.admin, UserRole.director, UserRole.master, UserRole.callcentre_admin, UserRole.callcentre_operator)
+  @Roles(UserRole.admin, UserRole.director, UserRole.master, UserRole.callcentre_admin, UserRole.callcentre_operator, UserRole.operator)
   @ApiOperation({ summary: 'Update cash transaction with IDOR protection' })
   @ApiResponse({ status: 200, description: 'Transaction updated successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden - Access denied' })
@@ -109,6 +109,7 @@ export class CashController {
       req.user.role !== UserRole.director &&
       req.user.role !== UserRole.callcentre_admin &&
       req.user.role !== UserRole.callcentre_operator &&
+      req.user.role !== UserRole.operator &&
       transaction.data.nameCreate !== req.user.name
     ) {
       throw new ForbiddenException('У вас нет прав на обновление этой транзакции');
@@ -120,7 +121,7 @@ export class CashController {
   @Delete(':id')
   @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.admin, UserRole.callcentre_admin, UserRole.callcentre_operator)
+  @Roles(UserRole.admin, UserRole.callcentre_admin, UserRole.callcentre_operator, UserRole.operator)
   @ApiOperation({ summary: 'Delete cash transaction with IDOR protection' })
   @ApiResponse({ status: 200, description: 'Transaction deleted successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden - Access denied' })
@@ -136,7 +137,8 @@ export class CashController {
     if (
       req.user.role !== UserRole.admin &&
       req.user.role !== UserRole.callcentre_admin &&
-      req.user.role !== UserRole.callcentre_operator
+      req.user.role !== UserRole.callcentre_operator &&
+      req.user.role !== UserRole.operator
     ) {
       throw new ForbiddenException('У вас нет прав на удаление этой транзакции');
     }
