@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Patch, Body, Param, Query, UseGuards, Request, HttpCode, HttpStatus, ParseIntPipe, ForbiddenException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Patch, Body, Param, Query, UseGuards, Request, HttpCode, HttpStatus, ParseIntPipe, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { CookieJwtAuthGuard } from '../auth/guards/cookie-jwt-auth.guard';
 import { CashService } from './cash.service';
@@ -26,7 +26,7 @@ export class CashController {
   @Get()
   @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.admin, UserRole.director, UserRole.master, UserRole.callcentre_admin)
+  @Roles(UserRole.admin, UserRole.director, UserRole.master, UserRole.callcentre_admin, UserRole.callcentre_operator)
   @ApiOperation({ summary: 'Get all cash transactions with pagination' })
   @ApiResponse({ status: 200, description: 'Transactions retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -40,7 +40,7 @@ export class CashController {
   @Get(':id')
   @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.admin, UserRole.director, UserRole.master, UserRole.callcentre_admin)
+  @Roles(UserRole.admin, UserRole.director, UserRole.master, UserRole.callcentre_admin, UserRole.callcentre_operator)
   @ApiOperation({ summary: 'Get cash transaction by ID with IDOR protection' })
   @ApiResponse({ status: 200, description: 'Transaction retrieved successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden - Access denied' })
@@ -65,7 +65,7 @@ export class CashController {
       return transaction;
     }
 
-    // Мастер может видеть только свои транзакции
+    // Мастер и оператор могут видеть только свои транзакции
     if (transaction.data.nameCreate !== req.user.name) {
       throw new ForbiddenException('У вас нет доступа к этой транзакции');
     }
@@ -91,7 +91,7 @@ export class CashController {
   @Put(':id')
   @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.admin, UserRole.director, UserRole.master, UserRole.callcentre_admin)
+  @Roles(UserRole.admin, UserRole.director, UserRole.master, UserRole.callcentre_admin, UserRole.callcentre_operator)
   @ApiOperation({ summary: 'Update cash transaction with IDOR protection' })
   @ApiResponse({ status: 200, description: 'Transaction updated successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden - Access denied' })
@@ -108,12 +108,40 @@ export class CashController {
       req.user.role !== UserRole.admin &&
       req.user.role !== UserRole.director &&
       req.user.role !== UserRole.callcentre_admin &&
+      req.user.role !== UserRole.callcentre_operator &&
       transaction.data.nameCreate !== req.user.name
     ) {
       throw new ForbiddenException('У вас нет прав на обновление этой транзакции');
     }
 
     return this.cashService.updateCash(id, dto, req.user);
+  }
+
+  @Delete(':id')
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.admin, UserRole.callcentre_admin, UserRole.callcentre_operator)
+  @ApiOperation({ summary: 'Delete cash transaction with IDOR protection' })
+  @ApiResponse({ status: 200, description: 'Transaction deleted successfully' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Access denied' })
+  @ApiResponse({ status: 404, description: 'Transaction not found' })
+  async deleteCash(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: { user: RequestUser }
+  ) {
+    // 🔒 IDOR Protection: Проверяем права перед удалением
+    const transaction = await this.cashService.getCashTransaction(id);
+    
+    // Только админ и операторы КЦ могут удалять транзакции
+    if (
+      req.user.role !== UserRole.admin &&
+      req.user.role !== UserRole.callcentre_admin &&
+      req.user.role !== UserRole.callcentre_operator
+    ) {
+      throw new ForbiddenException('У вас нет прав на удаление этой транзакции');
+    }
+
+    return this.cashService.deleteCash(id);
   }
 
 }

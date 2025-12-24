@@ -201,6 +201,35 @@ export class CashService {
     }
   }
 
+  async deleteCash(id: number) {
+    const transaction = await this.prisma.cash.findUnique({
+      where: { id },
+    });
+
+    if (!transaction) {
+      throw new NotFoundException('Cash transaction not found');
+    }
+
+    try {
+      await this.prisma.cash.delete({
+        where: { id },
+      });
+
+      this.logger.log(`Cash transaction ${id} deleted successfully`);
+
+      return {
+        success: true,
+        message: 'Cash transaction deleted successfully',
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to delete cash transaction ${id}: ${error.message}`,
+        error.stack
+      );
+      throw error;
+    }
+  }
+
 }
 
 
