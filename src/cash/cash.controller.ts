@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Patch, Body, Param, Query, UseGuards, Request, HttpCode, HttpStatus, ParseIntPipe, ForbiddenException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Patch, Body, Param, Query, UseGuards, Request, HttpCode, HttpStatus, ParseIntPipe, ForbiddenException, Ip } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { CookieJwtAuthGuard } from '../auth/guards/cookie-jwt-auth.guard';
 import { CashService } from './cash.service';
@@ -6,11 +6,15 @@ import { CreateCashDto, UpdateCashDto, ApproveCashDto } from './dto/cash.dto';
 import { GetCashQueryDto } from './dto/query.dto';
 import { RolesGuard, Roles, UserRole } from '../auth/roles.guard';
 import { RequestUser } from '../auth/interfaces/jwt-payload.interface';
+import { AuditService } from '../audit/audit.service';
 
 @ApiTags('cash')
 @Controller('cash')
 export class CashController {
-  constructor(private cashService: CashService) {}
+  constructor(
+    private cashService: CashService,
+    private auditService: AuditService,
+  ) {}
 
   @Get('health')
   @HttpCode(HttpStatus.OK)
@@ -83,9 +87,38 @@ export class CashController {
   @ApiResponse({ status: 409, description: 'Conflict - Duplicate payment purpose' })
   async createCash(
     @Body() dto: CreateCashDto,
-    @Request() req: { user: RequestUser }
+    @Request() req: { user: RequestUser; headers: any },
+    @Ip() ip: string
   ) {
-    return this.cashService.createCash(dto, req.user);
+    const result = await this.cashService.createCash(dto, req.user);
+    
+    // Логируем создание прихода или расхода
+    const userAgent = req.headers['user-agent'] || 'Unknown';
+    if (dto.name === 'приход') {
+      await this.auditService.logCashIncome(
+        result.data.id,
+        req.user.sub,
+        req.user.role,
+        req.user.login,
+        ip,
+        userAgent,
+        dto.amount.toString(),
+        dto.city || 'Unknown'
+      );
+    } else if (dto.name === 'расход') {
+      await this.auditService.logCashExpense(
+        result.data.id,
+        req.user.sub,
+        req.user.role,
+        req.user.login,
+        ip,
+        userAgent,
+        dto.amount.toString(),
+        dto.city || 'Unknown'
+      );
+    }
+    
+    return result;
   }
 
   @Put(':id')
@@ -99,7 +132,8 @@ export class CashController {
   async updateCash(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateCashDto,
-    @Request() req: { user: RequestUser }
+    @Request() req: { user: RequestUser; headers: any },
+    @Ip() ip: string
   ) {
     // 🔒 IDOR Protection: Проверяем права перед обновлением
     const transaction = await this.cashService.getCashTransaction(id);
@@ -115,7 +149,21 @@ export class CashController {
       throw new ForbiddenException('У вас нет прав на обновление этой транзакции');
     }
 
-    return this.cashService.updateCash(id, dto, req.user);
+    const result = await this.cashService.updateCash(id, dto, req.user);
+    
+    // Логируем обновление
+    const userAgent = req.headers['user-agent'] || 'Unknown';
+    await this.auditService.logCashUpdate(
+      id,
+      req.user.sub,
+      req.user.role,
+      req.user.login,
+      ip,
+      userAgent,
+      dto
+    );
+    
+    return result;
   }
 
   @Delete(':id')
@@ -128,7 +176,8 @@ export class CashController {
   @ApiResponse({ status: 404, description: 'Transaction not found' })
   async deleteCash(
     @Param('id', ParseIntPipe) id: number,
-    @Request() req: { user: RequestUser }
+    @Request() req: { user: RequestUser; headers: any },
+    @Ip() ip: string
   ) {
     // 🔒 IDOR Protection: Проверяем права перед удалением
     const transaction = await this.cashService.getCashTransaction(id);
@@ -143,7 +192,20 @@ export class CashController {
       throw new ForbiddenException('У вас нет прав на удаление этой транзакции');
     }
 
-    return this.cashService.deleteCash(id);
+    const result = await this.cashService.deleteCash(id);
+    
+    // Логируем удаление
+    const userAgent = req.headers['user-agent'] || 'Unknown';
+    await this.auditService.logCashDelete(
+      id,
+      req.user.sub,
+      req.user.role,
+      req.user.login,
+      ip,
+      userAgent
+    );
+    
+    return result;
   }
 
 }
