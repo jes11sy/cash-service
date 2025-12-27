@@ -97,7 +97,7 @@ export class CashController {
     if (dto.name === 'приход') {
       await this.auditService.logCashIncome(
         result.data.id,
-        req.user.sub,
+        req.user.userId,
         req.user.role,
         req.user.login,
         ip,
@@ -108,7 +108,7 @@ export class CashController {
     } else if (dto.name === 'расход') {
       await this.auditService.logCashExpense(
         result.data.id,
-        req.user.sub,
+        req.user.userId,
         req.user.role,
         req.user.login,
         ip,
@@ -155,7 +155,7 @@ export class CashController {
     const userAgent = req.headers['user-agent'] || 'Unknown';
     await this.auditService.logCashUpdate(
       id,
-      req.user.sub,
+      req.user.userId,
       req.user.role,
       req.user.login,
       ip,
@@ -198,7 +198,7 @@ export class CashController {
     const userAgent = req.headers['user-agent'] || 'Unknown';
     await this.auditService.logCashDelete(
       id,
-      req.user.sub,
+      req.user.userId,
       req.user.role,
       req.user.login,
       ip,
