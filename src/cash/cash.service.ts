@@ -4,6 +4,14 @@ import { CreateCashDto, UpdateCashDto, ApproveCashDto } from './dto/cash.dto';
 import { GetCashQueryDto } from './dto/query.dto';
 import { RequestUser } from '../auth/interfaces/jwt-payload.interface';
 
+export interface CashStats {
+  totalIncome: number;
+  totalExpense: number;
+  balance: number;
+  incomeCount: number;
+  expenseCount: number;
+}
+
 @Injectable()
 export class CashService {
   private readonly logger = new Logger(CashService.name);
@@ -226,6 +234,103 @@ export class CashService {
         `Failed to delete cash transaction ${id}: ${error.message}`,
         error.stack
       );
+      throw error;
+    }
+  }
+
+  /**
+   * 🔧 FIX: Получить статистику кассы через SQL агрегацию
+   * Это намного быстрее чем загрузка 10000 записей и подсчет на клиенте
+   * 
+   * Фильтры:
+   * - city: фильтр по городу
+   * - type: 'приход' или 'расход' (опционально)
+   * - startDate/endDate: фильтр по дате
+   */
+  async getCashStats(
+    user: RequestUser,
+    filters?: {
+      city?: string;
+      type?: 'приход' | 'расход';
+      startDate?: string;
+      endDate?: string;
+    }
+  ): Promise<{ success: true; data: CashStats }> {
+    // Базовые условия фильтрации
+    const where: any = {};
+
+    // Фильтрация по городам пользователя (для директоров и не-админов)
+    if (user.role !== 'admin' && user.cities && user.cities.length > 0) {
+      if (filters?.city) {
+        if (user.cities.includes(filters.city)) {
+          where.city = filters.city;
+        } else {
+          // Пользователь запрашивает не свой город - возвращаем нули
+          return {
+            success: true,
+            data: {
+              totalIncome: 0,
+              totalExpense: 0,
+              balance: 0,
+              incomeCount: 0,
+              expenseCount: 0,
+            },
+          };
+        }
+      } else {
+        where.city = { in: user.cities };
+      }
+    } else if (filters?.city) {
+      where.city = filters.city;
+    }
+
+    // Фильтр по дате
+    if (filters?.startDate || filters?.endDate) {
+      where.dateCreate = {};
+      if (filters.startDate) {
+        where.dateCreate.gte = new Date(filters.startDate);
+      }
+      if (filters.endDate) {
+        const endDate = new Date(filters.endDate);
+        endDate.setHours(23, 59, 59, 999);
+        where.dateCreate.lte = endDate;
+      }
+    }
+
+    try {
+      // 🔧 Используем SQL агрегацию вместо загрузки всех записей
+      const [incomeStats, expenseStats] = await Promise.all([
+        this.prisma.cash.aggregate({
+          where: { ...where, name: 'приход' },
+          _sum: { amount: true },
+          _count: { id: true },
+        }),
+        this.prisma.cash.aggregate({
+          where: { ...where, name: 'расход' },
+          _sum: { amount: true },
+          _count: { id: true },
+        }),
+      ]);
+
+      const totalIncome = Number(incomeStats._sum.amount || 0);
+      const totalExpense = Number(expenseStats._sum.amount || 0);
+
+      const stats: CashStats = {
+        totalIncome,
+        totalExpense,
+        balance: totalIncome - totalExpense,
+        incomeCount: incomeStats._count.id,
+        expenseCount: expenseStats._count.id,
+      };
+
+      this.logger.log(`User ${user.userId} fetched cash stats: income=${totalIncome}, expense=${totalExpense}`);
+
+      return {
+        success: true,
+        data: stats,
+      };
+    } catch (error) {
+      this.logger.error(`Error fetching cash stats: ${error.message}`, error.stack);
       throw error;
     }
   }

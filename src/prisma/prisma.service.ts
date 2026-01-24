@@ -5,6 +5,7 @@ import { PrismaClient } from '@prisma/client';
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
   private keepAliveInterval: NodeJS.Timeout | null = null;
+  private isReady: boolean = false;
 
   constructor() {
     // ✅ ОПТИМИЗИРОВАНО: Cash Service - низкая/средняя нагрузка
@@ -45,18 +46,58 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       await this.$connect();
       this.logger.log('✅ Database connected');
       
-      // ✅ FIX: Keepalive ping каждые 60 секунд
+      // 🔧 FIX: Прогрев соединения - выполняем тестовый запрос к таблице cash
+      // Это предотвращает cold start 502 ошибки при первом реальном запросе
+      try {
+        const warmupStart = Date.now();
+        await this.$queryRaw`SELECT 1`;
+        // Прогреваем connection pool - делаем легкий запрос к cash
+        await this.cash.findFirst({ take: 1 });
+        const warmupTime = Date.now() - warmupStart;
+        this.logger.log(`✅ Database warmup completed in ${warmupTime}ms`);
+        this.isReady = true;
+      } catch (warmupError: any) {
+        // Если таблица пустая или ошибка - не критично, продолжаем
+        this.logger.warn(`⚠️ Database warmup partial: ${warmupError?.message}`);
+        this.isReady = true;
+      }
+      
+      // ✅ FIX: Keepalive ping каждые 30 секунд (было 60)
       this.keepAliveInterval = setInterval(async () => {
         try {
           await this.$queryRaw`SELECT 1`;
         } catch (error: any) {
           this.logger.warn(`⚠️ Keepalive ping failed: ${error?.message}`);
+          this.isReady = false;
         }
-      }, 60000);
+      }, 30000);
     } catch (error) {
       this.logger.error('❌ Failed to connect to database', error);
       throw error;
     }
+  }
+
+  /**
+   * Проверка готовности сервиса для readiness probe
+   */
+  async checkHealth(): Promise<{ healthy: boolean; latencyMs: number }> {
+    const start = Date.now();
+    try {
+      await this.$queryRaw`SELECT 1`;
+      const latencyMs = Date.now() - start;
+      this.isReady = true;
+      return { healthy: true, latencyMs };
+    } catch (error) {
+      this.isReady = false;
+      return { healthy: false, latencyMs: Date.now() - start };
+    }
+  }
+
+  /**
+   * Быстрая проверка готовности (без запроса к БД)
+   */
+  isHealthy(): boolean {
+    return this.isReady;
   }
 
   async onModuleDestroy() {

@@ -27,6 +27,29 @@ export class CashController {
     };
   }
 
+  /**
+   * 🔧 FIX: Endpoint для получения статистики кассы через SQL агрегацию
+   * Это решает проблему с limit=10000 и 502 ошибками
+   * 
+   * Возвращает: totalIncome, totalExpense, balance, incomeCount, expenseCount
+   */
+  @Get('stats')
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.admin, UserRole.director, UserRole.master, UserRole.callcentre_admin, UserRole.callcentre_operator, UserRole.operator)
+  @ApiOperation({ summary: 'Get cash statistics (aggregated on server)' })
+  @ApiResponse({ status: 200, description: 'Statistics retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getCashStats(
+    @Query('city') city?: string,
+    @Query('type') type?: 'приход' | 'расход',
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Request() req?: { user: RequestUser }
+  ) {
+    return this.cashService.getCashStats(req.user, { city, type, startDate, endDate });
+  }
+
   @Get()
   @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
