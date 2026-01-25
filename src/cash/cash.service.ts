@@ -57,7 +57,9 @@ export class CashService {
     // Пагинация
     const skip = (page - 1) * limit;
 
-    try {
+    // 🔧 FIX: Используем executeWithRetry для автоматического переподключения при stale connection
+    // Это решает проблему 502 ошибок после простоя
+    return this.prisma.executeWithRetry(async () => {
       const [transactions, total] = await Promise.all([
         this.prisma.cash.findMany({
           where,
@@ -80,10 +82,7 @@ export class CashService {
           totalPages: Math.ceil(total / limit),
         },
       };
-    } catch (error) {
-      this.logger.error(`Error fetching cash transactions: ${error.message}`, error.stack);
-      throw error;
-    }
+    });
   }
 
   async getCashTransaction(id: number) {
@@ -297,8 +296,9 @@ export class CashService {
       }
     }
 
-    try {
-      // 🔧 Используем SQL агрегацию вместо загрузки всех записей
+    // 🔧 FIX: Используем executeWithRetry для автоматического переподключения при stale connection
+    // Это решает проблему 502 ошибок после простоя
+    return this.prisma.executeWithRetry(async () => {
       const [incomeStats, expenseStats] = await Promise.all([
         this.prisma.cash.aggregate({
           where: { ...where, name: 'приход' },
@@ -329,10 +329,7 @@ export class CashService {
         success: true,
         data: stats,
       };
-    } catch (error) {
-      this.logger.error(`Error fetching cash stats: ${error.message}`, error.stack);
-      throw error;
-    }
+    });
   }
 
 }

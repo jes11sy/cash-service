@@ -6,22 +6,25 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   private readonly logger = new Logger(PrismaService.name);
   private keepAliveInterval: NodeJS.Timeout | null = null;
   private isReady: boolean = false;
+  private reconnectAttempts: number = 0;
+  private readonly MAX_RECONNECT_ATTEMPTS = 3;
 
   constructor() {
     // ✅ ОПТИМИЗИРОВАНО: Cash Service - низкая/средняя нагрузка
     const databaseUrl = process.env.DATABASE_URL || '';
     const hasParams = databaseUrl.includes('?');
     
+    // 🔧 FIX: Более агрессивные настройки для предотвращения 502
     const connectionParams = [
       'connection_limit=15',
-      'pool_timeout=20',
-      'connect_timeout=10',
-      'socket_timeout=60',
-      // ✅ FIX: TCP Keepalive для предотвращения idle-session timeout
+      'pool_timeout=30',           // Увеличен таймаут пула
+      'connect_timeout=15',        // Увеличен таймаут подключения
+      'socket_timeout=120',        // Увеличен socket timeout
+      // ✅ FIX: Более агрессивный TCP Keepalive
       'keepalives=1',
-      'keepalives_idle=30',
-      'keepalives_interval=10',
-      'keepalives_count=3',
+      'keepalives_idle=15',        // Было 30, теперь 15 секунд
+      'keepalives_interval=5',     // Было 10, теперь 5 секунд
+      'keepalives_count=5',        // Было 3, теперь 5 попыток
     ];
     
     const needsParams = !databaseUrl.includes('connection_limit');
@@ -37,8 +40,59 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     });
 
     if (needsParams) {
-      this.logger.log('✅ Connection pool configured with keepalive');
+      this.logger.log('✅ Connection pool configured with aggressive keepalive');
     }
+  }
+
+  /**
+   * 🔧 FIX: Выполнить запрос с автоматическим переподключением при stale connection
+   * Это решает проблему 502 ошибок после простоя
+   */
+  async executeWithRetry<T>(operation: () => Promise<T>, maxRetries = 2): Promise<T> {
+    let lastError: Error | null = null;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error: any) {
+        lastError = error;
+        
+        // Проверяем, является ли ошибка связанной с соединением
+        const isConnectionError = 
+          error.code === 'P1001' || // Can't reach database server
+          error.code === 'P1002' || // Database server timeout
+          error.code === 'P1008' || // Operations timed out
+          error.code === 'P1017' || // Server closed connection
+          error.code === 'P2024' || // Pool timeout
+          error.message?.includes('Connection') ||
+          error.message?.includes('ECONNRESET') ||
+          error.message?.includes('ETIMEDOUT') ||
+          error.message?.includes('socket hang up');
+        
+        if (isConnectionError && attempt < maxRetries) {
+          this.logger.warn(`⚠️ Connection error on attempt ${attempt + 1}, reconnecting... Error: ${error.message}`);
+          
+          try {
+            // Переподключаемся
+            await this.$disconnect();
+            await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1))); // Экспоненциальная задержка
+            await this.$connect();
+            this.logger.log('✅ Reconnected to database');
+            
+            // Прогреваем соединение
+            await this.$queryRaw`SELECT 1`;
+            continue;
+          } catch (reconnectError: any) {
+            this.logger.error(`❌ Reconnect failed: ${reconnectError.message}`);
+          }
+        }
+        
+        // Для не-connection ошибок или последней попытки - пробрасываем
+        throw error;
+      }
+    }
+    
+    throw lastError;
   }
 
   async onModuleInit() {
@@ -62,15 +116,35 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         this.isReady = true;
       }
       
-      // ✅ FIX: Keepalive ping каждые 30 секунд (было 60)
+      // ✅ FIX: Keepalive ping каждые 15 секунд (было 30) для агрессивного поддержания соединения
       this.keepAliveInterval = setInterval(async () => {
         try {
           await this.$queryRaw`SELECT 1`;
+          this.reconnectAttempts = 0; // Сбрасываем счетчик при успехе
         } catch (error: any) {
           this.logger.warn(`⚠️ Keepalive ping failed: ${error?.message}`);
-          this.isReady = false;
+          this.reconnectAttempts++;
+          
+          // 🔧 FIX: Автоматическое переподключение при проблемах с keepalive
+          if (this.reconnectAttempts <= this.MAX_RECONNECT_ATTEMPTS) {
+            try {
+              this.logger.log(`🔄 Attempting reconnect (${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS})...`);
+              await this.$disconnect();
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              await this.$connect();
+              await this.$queryRaw`SELECT 1`;
+              this.logger.log('✅ Reconnected successfully');
+              this.isReady = true;
+              this.reconnectAttempts = 0;
+            } catch (reconnectError: any) {
+              this.logger.error(`❌ Reconnect failed: ${reconnectError?.message}`);
+              this.isReady = false;
+            }
+          } else {
+            this.isReady = false;
+          }
         }
-      }, 30000);
+      }, 15000); // 15 секунд вместо 30
     } catch (error) {
       this.logger.error('❌ Failed to connect to database', error);
       throw error;
