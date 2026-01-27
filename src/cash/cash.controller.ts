@@ -50,6 +50,26 @@ export class CashController {
     return this.cashService.getCashStats(req.user, { city, type, startDate, endDate });
   }
 
+  /**
+   * 🔧 FIX: Endpoint для получения статистики по городам через SQL агрегацию
+   * Группирует транзакции по городам и считает income/expense для каждого
+   * Используется в админке вместо загрузки всех транзакций с limit=10000
+   */
+  @Get('stats/by-city')
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.CALLCENTRE_ADMIN)
+  @ApiOperation({ summary: 'Get cash statistics grouped by city' })
+  @ApiResponse({ status: 200, description: 'City statistics retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getCashStatsByCity(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Request() req?: { user: RequestUser }
+  ) {
+    return this.cashService.getCashStatsByCity(req.user, { startDate, endDate });
+  }
+
   @Get()
   @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()

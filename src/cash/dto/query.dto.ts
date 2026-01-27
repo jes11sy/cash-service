@@ -53,13 +53,13 @@ export class GetCashQueryDto {
     minimum: 1,
     maximum: 500,
     default: 50,
-    description: 'Количество записей на странице (макс. 500 для предотвращения OOM)' 
+    description: 'Количество записей на странице (для статистики используйте GET /cash/stats)' 
   })
   @IsOptional()
   @Type(() => Number)
   @IsInt({ message: 'Лимит должен быть целым числом' })
   @Min(1, { message: 'Минимальный лимит: 1' })
-  @Max(500, { message: 'Максимальный лимит: 500' })
+  @Max(500, { message: 'Максимальный лимит: 500. Для статистики используйте GET /cash/stats' })
   limit?: number;
 }
 

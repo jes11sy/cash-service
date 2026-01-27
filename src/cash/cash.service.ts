@@ -12,6 +12,13 @@ export interface CashStats {
   expenseCount: number;
 }
 
+export interface CityStats {
+  city: string;
+  income: number;
+  expenses: number;
+  balance: number;
+}
+
 @Injectable()
 export class CashService {
   private readonly logger = new Logger(CashService.name);
@@ -348,6 +355,102 @@ export class CashService {
       return {
         success: true,
         data: stats,
+      };
+    });
+  }
+
+  /**
+   * 🔧 FIX: Получить статистику кассы сгруппированную по городам
+   * Используется в админке вместо загрузки всех транзакций
+   * 
+   * Фильтры:
+   * - startDate/endDate: фильтр по дате
+   */
+  async getCashStatsByCity(
+    user: RequestUser,
+    filters?: {
+      startDate?: string;
+      endDate?: string;
+    }
+  ): Promise<{ success: true; data: { cities: CityStats[]; totals: CashStats } }> {
+    // Базовые условия фильтрации
+    const where: any = {};
+
+    // Фильтрация по городам пользователя (для директоров и не-админов)
+    if (user.role !== 'admin' && user.cities && user.cities.length > 0) {
+      where.city = { in: user.cities };
+    }
+
+    // Фильтр по дате
+    if (filters?.startDate || filters?.endDate) {
+      where.dateCreate = {};
+      if (filters.startDate) {
+        where.dateCreate.gte = new Date(filters.startDate);
+      }
+      if (filters.endDate) {
+        const endDate = new Date(filters.endDate);
+        endDate.setHours(23, 59, 59, 999);
+        where.dateCreate.lte = endDate;
+      }
+    }
+
+    return this.prisma.executeWithRetry(async () => {
+      // Группируем по городу и типу транзакции
+      const groupedStats = await this.prisma.cash.groupBy({
+        by: ['city', 'name'],
+        where,
+        _sum: { amount: true },
+        _count: { id: true },
+      });
+
+      // Преобразуем результат в удобный формат по городам
+      const cityMap = new Map<string, CityStats>();
+      let totalIncome = 0;
+      let totalExpense = 0;
+      let incomeCount = 0;
+      let expenseCount = 0;
+
+      for (const stat of groupedStats) {
+        const city = stat.city || 'Не указан';
+        if (!cityMap.has(city)) {
+          cityMap.set(city, { city, income: 0, expenses: 0, balance: 0 });
+        }
+
+        const cityData = cityMap.get(city)!;
+        const amount = Number(stat._sum.amount || 0);
+
+        if (stat.name === 'приход') {
+          cityData.income += amount;
+          totalIncome += amount;
+          incomeCount += stat._count.id;
+        } else if (stat.name === 'расход') {
+          cityData.expenses += amount;
+          totalExpense += amount;
+          expenseCount += stat._count.id;
+        }
+      }
+
+      // Рассчитываем баланс для каждого города
+      for (const cityData of cityMap.values()) {
+        cityData.balance = cityData.income - cityData.expenses;
+      }
+
+      const cities = Array.from(cityMap.values()).sort((a, b) => a.city.localeCompare(b.city));
+
+      this.logger.log(`User ${user.userId} fetched cash stats by city: ${cities.length} cities`);
+
+      return {
+        success: true,
+        data: {
+          cities,
+          totals: {
+            totalIncome,
+            totalExpense,
+            balance: totalIncome - totalExpense,
+            incomeCount,
+            expenseCount,
+          },
+        },
       };
     });
   }
