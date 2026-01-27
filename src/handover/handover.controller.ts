@@ -14,7 +14,7 @@ export class HandoverController {
   @Get()
   @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.master)
+  @Roles(UserRole.MASTER)
   @ApiOperation({ summary: 'Get master cash submissions with pagination' })
   @ApiResponse({ status: 200, description: 'Cash submissions retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })

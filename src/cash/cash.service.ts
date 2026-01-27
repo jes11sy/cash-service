@@ -151,8 +151,13 @@ export class CashService {
     }
   }
 
-  async updateCash(id: number, dto: UpdateCashDto, user: RequestUser) {
-    const transaction = await this.prisma.cash.findUnique({
+  /**
+   * 🔧 OPTIMIZED: Обновление транзакции с проверкой прав
+   * Принимает опциональный existingTransaction чтобы избежать двойного запроса к БД
+   */
+  async updateCash(id: number, dto: UpdateCashDto, user: RequestUser, existingTransaction?: any) {
+    // Используем переданную транзакцию или загружаем из БД
+    const transaction = existingTransaction || await this.prisma.cash.findUnique({
       where: { id },
     });
 
@@ -208,13 +213,20 @@ export class CashService {
     }
   }
 
-  async deleteCash(id: number) {
-    const transaction = await this.prisma.cash.findUnique({
-      where: { id },
-    });
+  /**
+   * 🔧 OPTIMIZED: Удаление транзакции
+   * Принимает опциональный existingTransaction чтобы избежать двойного запроса к БД
+   */
+  async deleteCash(id: number, existingTransaction?: any) {
+    // Используем переданную транзакцию или проверяем существование
+    if (!existingTransaction) {
+      const transaction = await this.prisma.cash.findUnique({
+        where: { id },
+      });
 
-    if (!transaction) {
-      throw new NotFoundException('Cash transaction not found');
+      if (!transaction) {
+        throw new NotFoundException('Cash transaction not found');
+      }
     }
 
     try {
@@ -299,28 +311,36 @@ export class CashService {
     // 🔧 FIX: Используем executeWithRetry для автоматического переподключения при stale connection
     // Это решает проблему 502 ошибок после простоя
     return this.prisma.executeWithRetry(async () => {
-      const [incomeStats, expenseStats] = await Promise.all([
-        this.prisma.cash.aggregate({
-          where: { ...where, name: 'приход' },
-          _sum: { amount: true },
-          _count: { id: true },
-        }),
-        this.prisma.cash.aggregate({
-          where: { ...where, name: 'расход' },
-          _sum: { amount: true },
-          _count: { id: true },
-        }),
-      ]);
+      // 🔧 OPTIMIZED: Используем один groupBy запрос вместо двух aggregate
+      const groupedStats = await this.prisma.cash.groupBy({
+        by: ['name'],
+        where,
+        _sum: { amount: true },
+        _count: { id: true },
+      });
 
-      const totalIncome = Number(incomeStats._sum.amount || 0);
-      const totalExpense = Number(expenseStats._sum.amount || 0);
+      // Преобразуем результат groupBy в удобный формат
+      let totalIncome = 0;
+      let totalExpense = 0;
+      let incomeCount = 0;
+      let expenseCount = 0;
+
+      for (const stat of groupedStats) {
+        if (stat.name === 'приход') {
+          totalIncome = Number(stat._sum.amount || 0);
+          incomeCount = stat._count.id;
+        } else if (stat.name === 'расход') {
+          totalExpense = Number(stat._sum.amount || 0);
+          expenseCount = stat._count.id;
+        }
+      }
 
       const stats: CashStats = {
         totalIncome,
         totalExpense,
         balance: totalIncome - totalExpense,
-        incomeCount: incomeStats._count.id,
-        expenseCount: expenseStats._count.id,
+        incomeCount,
+        expenseCount,
       };
 
       this.logger.log(`User ${user.userId} fetched cash stats: income=${totalIncome}, expense=${totalExpense}`);

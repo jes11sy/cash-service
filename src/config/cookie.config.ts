@@ -12,7 +12,7 @@ export const CookieConfig = {
   COOKIE_OPTIONS: {
     httpOnly: true,                           // ✅ Защита от XSS - недоступен из JavaScript
     secure: process.env.NODE_ENV === 'production', // ✅ HTTPS только в production
-    sameSite: 'none' as const,                // ✅ Защита от CSRF (None - для cross-domain)
+    sameSite: 'none' as const,                // ⚠️ SameSite=None для cross-domain (НЕ защищает от CSRF! Защита на уровне CORS + токенов)
     path: '/',                                // Доступен на всех путях
     domain: '.lead-schem.ru',                 // Cross-domain для api.lead-schem.ru и core.lead-schem.ru
   },
@@ -27,7 +27,18 @@ export const CookieConfig = {
   // Подпись cookies
   // ⚠️ ОТКЛЮЧЕНО: JWT уже подписан, дополнительная подпись cookie избыточна
   ENABLE_COOKIE_SIGNING: false,
-  COOKIE_SECRET: process.env.COOKIE_SECRET || process.env.JWT_SECRET,
+  // 🔒 SECURITY: Рекомендуется использовать отдельный COOKIE_SECRET
+  // Fallback на JWT_SECRET только для обратной совместимости
+  COOKIE_SECRET: (() => {
+    const cookieSecret = process.env.COOKIE_SECRET;
+    const jwtSecret = process.env.JWT_SECRET;
+    
+    if (!cookieSecret && jwtSecret) {
+      console.warn('⚠️ SECURITY WARNING: COOKIE_SECRET not set, falling back to JWT_SECRET. Please set a separate COOKIE_SECRET in production.');
+    }
+    
+    return cookieSecret || jwtSecret;
+  })(),
 } as const;
 
 /**

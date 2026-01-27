@@ -7,9 +7,16 @@ import { GlobalExceptionFilter } from './filters/global-exception.filter';
 import { PrismaService } from './prisma/prisma.service';
 
 async function bootstrap() {
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  // ✅ FIX #86: Фильтрация уровней логов в production
+  const logLevels: ('log' | 'error' | 'warn' | 'debug' | 'verbose')[] = isProduction
+    ? ['log', 'error', 'warn']
+    : ['log', 'error', 'warn', 'debug', 'verbose'];
+
   // 📝 Настройка логирования с фильтрацией чувствительных данных
   const fastifyLogger = {
-    level: process.env.LOG_LEVEL || 'info',
+    level: isProduction ? 'warn' : (process.env.LOG_LEVEL || 'info'), // ✅ FIX #86: warn в production
     serializers: {
       req(request) {
         return {
@@ -53,6 +60,9 @@ async function bootstrap() {
       requestIdHeader: 'x-request-id',
       requestIdLogLabel: 'reqId',
     }),
+    {
+      logger: logLevels, // ✅ FIX #86: Применяем фильтрацию логов NestJS
+    },
   );
 
   const logger = new Logger('CashService');
@@ -77,6 +87,22 @@ async function bootstrap() {
     ],
     maxAge: 86400, // 24 hours
   });
+
+  // 🔒 SECURITY: Rate Limiting для защиты от DDoS и брутфорса
+  await app.register(require('@fastify/rate-limit'), {
+    max: 100, // Максимум 100 запросов
+    timeWindow: '1 minute', // За 1 минуту
+    errorResponseBuilder: () => ({
+      success: false,
+      statusCode: 429,
+      message: 'Слишком много запросов. Пожалуйста, подождите.',
+    }),
+    keyGenerator: (request: any) => {
+      // Используем userId из JWT если есть, иначе IP
+      return request.user?.userId?.toString() || request.ip;
+    },
+  });
+  logger.log('✅ Rate limiting configured (100 req/min)');
 
   // 🔒 Улучшенные Security Headers
   await app.register(require('@fastify/helmet'), {

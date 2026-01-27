@@ -1,6 +1,7 @@
-import { IsString, IsNumber, IsOptional, IsIn, Min, Max, IsPositive, MaxLength, Matches } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsIn, Min, Max, IsPositive, MaxLength, Matches, ValidateIf } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { SanitizeString, SanitizeStringSoft } from '../../utils/sanitize';
 
 export class CreateCashDto {
   @ApiProperty({ enum: ['приход', 'расход'] })
@@ -24,11 +25,14 @@ export class CreateCashDto {
   @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
+  @SanitizeString()
   city?: string;
 
   @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
+  @SanitizeStringSoft() // 🔒 Мягкая санитизация для заметок
+  @MaxLength(2000, { message: 'Заметка не может быть длиннее 2000 символов' })
   note?: string;
 
   @ApiProperty({ 
@@ -39,12 +43,14 @@ export class CreateCashDto {
   @IsOptional()
   @IsString()
   @MaxLength(500, { message: 'Путь не может быть длиннее 500 символов' })
+  @ValidateIf((o) => o.receiptDoc !== '' && o.receiptDoc !== undefined) // 🔧 FIX: Позволяет пустую строку
   @Matches(/\.(pdf|jpg|jpeg|png)$/i, { message: 'Разрешены только файлы: PDF, JPG, PNG' })
   receiptDoc?: string;
 
   @ApiProperty({ required: false, description: 'Назначение платежа (уникальный идентификатор заказа)' })
   @IsString()
   @IsOptional()
+  @SanitizeString() // 🔒 XSS защита
   @MaxLength(200)
   paymentPurpose?: string;
 }
@@ -67,16 +73,20 @@ export class UpdateCashDto {
   @ApiProperty({ required: false, enum: ['приход', 'расход'] })
   @IsString()
   @IsOptional()
+  @IsIn(['приход', 'расход']) // 🔧 FIX: Добавлена валидация значений
   name?: string;
 
   @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
+  @SanitizeString() // 🔒 XSS защита
   city?: string;
 
   @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
+  @SanitizeStringSoft() // 🔒 Мягкая санитизация для заметок
+  @MaxLength(2000)
   note?: string;
 
   @ApiProperty({ 
@@ -86,12 +96,14 @@ export class UpdateCashDto {
   @IsOptional()
   @IsString()
   @MaxLength(500)
-  @Matches(/\.(pdf|jpg|jpeg|png)$/i)
+  @ValidateIf((o) => o.receiptDoc !== '' && o.receiptDoc !== undefined) // 🔧 FIX: Позволяет пустую строку
+  @Matches(/\.(pdf|jpg|jpeg|png)$/i, { message: 'Разрешены только файлы: PDF, JPG, PNG' })
   receiptDoc?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
+  @SanitizeString() // 🔒 XSS защита
   @MaxLength(200)
   paymentPurpose?: string;
 }
@@ -105,6 +117,8 @@ export class ApproveCashDto {
   @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
+  @SanitizeStringSoft() // 🔒 Мягкая санитизация для заметок
+  @MaxLength(1000)
   note?: string;
 }
 

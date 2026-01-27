@@ -9,6 +9,35 @@ import {
 import { Request, Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 
+// 🔒 SECURITY: Список чувствительных полей для фильтрации из логов
+const SENSITIVE_FIELDS = ['password', 'token', 'secret', 'apiKey', 'authorization', 'cookie', 'creditCard', 'cardNumber', 'cvv', 'pin'];
+
+/**
+ * 🔒 Фильтрует чувствительные данные из объекта
+ */
+function sanitizeObject(obj: any, depth = 0): any {
+  if (depth > 5 || !obj || typeof obj !== 'object') {
+    return obj;
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(item => sanitizeObject(item, depth + 1));
+  }
+
+  const sanitized: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    const lowerKey = key.toLowerCase();
+    if (SENSITIVE_FIELDS.some(field => lowerKey.includes(field))) {
+      sanitized[key] = '[REDACTED]';
+    } else if (typeof value === 'object' && value !== null) {
+      sanitized[key] = sanitizeObject(value, depth + 1);
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
+
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
@@ -40,6 +69,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     if (status >= 500) {
       try {
+        // 🔒 SECURITY: Фильтруем чувствительные данные перед логированием
         await this.prisma.errorLog.create({
           data: {
             service: 'cash-service',
@@ -53,9 +83,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
             ip: request.ip || (request.headers['x-forwarded-for'] as string) || null,
             userAgent: request.headers['user-agent'] || null,
             metadata: {
-              body: request.body,
-              params: request.params,
-              query: request.query,
+              body: sanitizeObject(request.body),
+              params: sanitizeObject(request.params),
+              query: sanitizeObject(request.query),
             },
           },
         });

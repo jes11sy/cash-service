@@ -1,13 +1,14 @@
 import { Injectable, CanActivate, ExecutionContext, SetMetadata, ForbiddenException, UnauthorizedException, Logger } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
+// ✅ FIX #83: Унифицированный enum ролей (UPPERCASE ключи)
 export enum UserRole {
-  admin = 'admin',
-  master = 'master',
-  director = 'director',
-  callcentre_admin = 'callcentre_admin',
-  callcentre_operator = 'callcentre_operator',
-  operator = 'operator',
+  ADMIN = 'admin',
+  MASTER = 'master',
+  DIRECTOR = 'director',
+  CALLCENTRE_ADMIN = 'callcentre_admin',
+  CALLCENTRE_OPERATOR = 'callcentre_operator',
+  OPERATOR = 'operator',
 }
 
 export const Roles = (...roles: UserRole[]) => SetMetadata('roles', roles);

@@ -36,13 +36,27 @@ export class HandoverService {
     const skip = (page - 1) * limit;
 
     try {
+      // 🔧 OPTIMIZED: Убран include master - имя мастера уже есть в JWT токене (user.name)
+      // Это устраняет N+1 проблему и уменьшает нагрузку на БД
       const [orders, total] = await Promise.all([
         this.prisma.order.findMany({
           where,
-          include: {
-            master: {
-              select: { name: true }
-            }
+          select: {
+            id: true,
+            rk: true,
+            city: true,
+            phone: true,
+            clientName: true,
+            address: true,
+            result: true,
+            expenditure: true,
+            clean: true,
+            masterChange: true,
+            closingData: true,
+            cashSubmissionStatus: true,
+            cashSubmissionDate: true,
+            cashSubmissionAmount: true,
+            cashReceiptDoc: true,
           },
           orderBy: { closingData: 'desc' },
           skip,

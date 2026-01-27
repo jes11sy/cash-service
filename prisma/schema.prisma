@@ -87,7 +87,8 @@ model Order {
   cashReceiptDoc        String?            @map("cash_receipt_doc")
   cashApprovedBy        Int?               @map("cash_approved_by")
   cashApprovedDate      DateTime?          @map("cash_approved_date")
-  master                Master?            @relation(fields: [masterId], references: [id])
+  // ✅ FIX #146: SetNull - заказ остаётся, мастер открепляется
+  master                Master?            @relation(fields: [masterId], references: [id], onDelete: SetNull)
 
   // 🚀 Индексы производительности для handover
   @@index([masterId, statusOrder]) // Для поиска заказов мастера по статусу
