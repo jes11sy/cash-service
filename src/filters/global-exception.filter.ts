@@ -6,7 +6,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import { Request, Response } from 'express';
+import { FastifyRequest, FastifyReply } from 'fastify';
 import { PrismaService } from '../prisma/prisma.service';
 
 // 🔒 SECURITY: Список чувствительных полей для фильтрации из логов
@@ -46,8 +46,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
   async catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
-    const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest<Request>();
+    const response = ctx.getResponse<FastifyReply>();
+    const request = ctx.getRequest<FastifyRequest>();
 
     const status =
       exception instanceof HttpException
@@ -80,7 +80,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
             userRole: (request as any).user?.role || null,
             requestUrl: request.url,
             requestMethod: request.method,
-            ip: request.ip || (request.headers['x-forwarded-for'] as string) || null,
+            ip: request.ip || (request.headers['x-forwarded-for'] as string) || request.socket?.remoteAddress || null,
             userAgent: request.headers['user-agent'] || null,
             metadata: {
               body: sanitizeObject(request.body),
@@ -99,7 +99,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       stackTrace,
     );
 
-    response.status(status).json({
+    response.status(status).send({
       success: false,
       statusCode: status,
       timestamp: new Date().toISOString(),
