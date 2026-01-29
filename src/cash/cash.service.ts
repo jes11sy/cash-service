@@ -26,7 +26,7 @@ export class CashService {
   constructor(private prisma: PrismaService) {}
 
   async getCashTransactions(query: GetCashQueryDto, user: RequestUser) {
-    const { name, city, type, page = 1, limit = 50 } = query;
+    const { name, city, type, paymentPurpose, page = 1, limit = 50 } = query;
 
     const where: any = {};
 
@@ -38,6 +38,11 @@ export class CashService {
     // Фильтрация по названию (для обратной совместимости)
     if (name) {
       where.name = name;
+    }
+
+    // Фильтрация по назначению платежа (например, 'Штраф')
+    if (paymentPurpose) {
+      where.paymentPurpose = paymentPurpose;
     }
 
     // Фильтрация по городам пользователя (для директоров и не-админов)

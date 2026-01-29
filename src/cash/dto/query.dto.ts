@@ -37,6 +37,16 @@ export class GetCashQueryDto {
   city?: string;
 
   @ApiProperty({ 
+    required: false,
+    example: 'Штраф',
+    description: 'Назначение платежа (фильтр)' 
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100, { message: 'Назначение платежа не может быть длиннее 100 символов' })
+  paymentPurpose?: string;
+
+  @ApiProperty({ 
     required: false, 
     minimum: 1,
     default: 1,
