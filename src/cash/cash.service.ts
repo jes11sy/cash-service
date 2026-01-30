@@ -136,6 +136,7 @@ export class CashService {
             city,
             note: dto.note,
             receiptDoc: dto.receiptDoc,
+            receiptDocs: dto.receiptDocs || [], // Массив чеков для расходов
             paymentPurpose: dto.paymentPurpose,
             nameCreate: user.name,
           },
@@ -203,6 +204,7 @@ export class CashService {
           ...(dto.city && { city: dto.city }),
           ...(dto.note !== undefined && { note: dto.note }),
           ...(dto.receiptDoc && { receiptDoc: dto.receiptDoc }),
+          ...(dto.receiptDocs !== undefined && { receiptDocs: dto.receiptDocs }), // Массив чеков
           ...(dto.paymentPurpose && { paymentPurpose: dto.paymentPurpose }),
         },
       });

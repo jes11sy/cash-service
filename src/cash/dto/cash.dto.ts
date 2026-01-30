@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, IsIn, Min, Max, IsPositive, MaxLength, Matches, ValidateIf } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsIn, Min, Max, IsPositive, MaxLength, Matches, ValidateIf, IsArray, ArrayMaxSize } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { SanitizeString, SanitizeStringSoft } from '../../utils/sanitize';
@@ -46,6 +46,18 @@ export class CreateCashDto {
   @ValidateIf((o) => o.receiptDoc !== '' && o.receiptDoc !== undefined) // 🔧 FIX: Позволяет пустую строку
   @Matches(/\.(pdf|jpg|jpeg|png)$/i, { message: 'Разрешены только файлы: PDF, JPG, PNG' })
   receiptDoc?: string;
+
+  @ApiProperty({ 
+    required: false,
+    example: ['director/cash/receipt_doc/uuid1.pdf', 'director/cash/receipt_doc/uuid2.jpg'],
+    description: 'Массив S3 ключей чеков для расходов (максимум 10 файлов)'
+  })
+  @IsOptional()
+  @IsArray({ message: 'receiptDocs должен быть массивом' })
+  @ArrayMaxSize(10, { message: 'Максимум 10 чеков' })
+  @IsString({ each: true, message: 'Каждый элемент должен быть строкой' })
+  @MaxLength(500, { each: true, message: 'Путь не может быть длиннее 500 символов' })
+  receiptDocs?: string[];
 
   @ApiProperty({ required: false, description: 'Назначение платежа (уникальный идентификатор заказа)' })
   @IsString()
@@ -99,6 +111,18 @@ export class UpdateCashDto {
   @ValidateIf((o) => o.receiptDoc !== '' && o.receiptDoc !== undefined) // 🔧 FIX: Позволяет пустую строку
   @Matches(/\.(pdf|jpg|jpeg|png)$/i, { message: 'Разрешены только файлы: PDF, JPG, PNG' })
   receiptDoc?: string;
+
+  @ApiProperty({ 
+    required: false,
+    example: ['director/cash/receipt_doc/uuid1.pdf', 'director/cash/receipt_doc/uuid2.jpg'],
+    description: 'Массив S3 ключей чеков для расходов (максимум 10 файлов)'
+  })
+  @IsOptional()
+  @IsArray({ message: 'receiptDocs должен быть массивом' })
+  @ArrayMaxSize(10, { message: 'Максимум 10 чеков' })
+  @IsString({ each: true, message: 'Каждый элемент должен быть строкой' })
+  @MaxLength(500, { each: true, message: 'Путь не может быть длиннее 500 символов' })
+  receiptDocs?: string[];
 
   @ApiProperty({ required: false })
   @IsOptional()
