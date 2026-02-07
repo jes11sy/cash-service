@@ -26,7 +26,7 @@ export class CashService {
   constructor(private prisma: PrismaService) {}
 
   async getCashTransactions(query: GetCashQueryDto, user: RequestUser) {
-    const { name, city, type, paymentPurpose, page = 1, limit = 50 } = query;
+    const { name, city, type, paymentPurpose, startDate, endDate, page = 1, limit = 50 } = query;
 
     const where: any = {};
 
@@ -43,6 +43,19 @@ export class CashService {
     // Фильтрация по назначению платежа (например, 'Штраф')
     if (paymentPurpose) {
       where.paymentPurpose = paymentPurpose;
+    }
+
+    // 🔧 FIX: Добавлена фильтрация по дате
+    if (startDate || endDate) {
+      where.dateCreate = {};
+      if (startDate) {
+        where.dateCreate.gte = new Date(startDate);
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        where.dateCreate.lte = end;
+      }
     }
 
     // Фильтрация по городам пользователя (для директоров и не-админов)

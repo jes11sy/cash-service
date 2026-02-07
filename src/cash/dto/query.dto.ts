@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsIn, IsInt, Min, Max, MaxLength } from 'class-validator';
+import { IsOptional, IsString, IsIn, IsInt, Min, Max, MaxLength, IsDateString } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -45,6 +45,24 @@ export class GetCashQueryDto {
   @IsString()
   @MaxLength(100, { message: 'Назначение платежа не может быть длиннее 100 символов' })
   paymentPurpose?: string;
+
+  @ApiProperty({ 
+    required: false,
+    example: '2024-01-01',
+    description: 'Дата начала периода (YYYY-MM-DD)' 
+  })
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @ApiProperty({ 
+    required: false,
+    example: '2024-12-31',
+    description: 'Дата окончания периода (YYYY-MM-DD)' 
+  })
+  @IsOptional()
+  @IsString()
+  endDate?: string;
 
   @ApiProperty({ 
     required: false, 
