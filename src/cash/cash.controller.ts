@@ -36,18 +36,23 @@ export class CashController {
   @Get('stats')
   @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.MASTER, UserRole.CALLCENTRE_ADMIN, UserRole.CALLCENTRE_OPERATOR, UserRole.OPERATOR)
+  @Roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.MASTER, UserRole.OPERATOR)
   @ApiOperation({ summary: 'Get cash statistics (aggregated on server)' })
   @ApiResponse({ status: 200, description: 'Statistics retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getCashStats(
-    @Query('city') city?: string,
-    @Query('type') type?: 'приход' | 'расход',
+    @Query('cityId') cityId?: string,
+    @Query('type') type?: 'income' | 'expense',
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Request() req?: { user: RequestUser }
   ) {
-    return this.cashService.getCashStats(req.user, { city, type, startDate, endDate });
+    return this.cashService.getCashStats(req.user, {
+      cityId: cityId ? Number(cityId) : undefined,
+      type,
+      startDate,
+      endDate,
+    });
   }
 
   /**
@@ -58,7 +63,7 @@ export class CashController {
   @Get('stats/by-city')
   @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.CALLCENTRE_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.DIRECTOR)
   @ApiOperation({ summary: 'Get cash statistics grouped by city' })
   @ApiResponse({ status: 200, description: 'City statistics retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -73,7 +78,7 @@ export class CashController {
   @Get()
   @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.MASTER, UserRole.CALLCENTRE_ADMIN, UserRole.CALLCENTRE_OPERATOR, UserRole.OPERATOR)
+  @Roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.MASTER, UserRole.OPERATOR)
   @ApiOperation({ summary: 'Get all cash transactions with pagination' })
   @ApiResponse({ status: 200, description: 'Transactions retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -87,7 +92,7 @@ export class CashController {
   @Get(':id')
   @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.MASTER, UserRole.CALLCENTRE_ADMIN, UserRole.CALLCENTRE_OPERATOR, UserRole.OPERATOR)
+  @Roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.MASTER, UserRole.OPERATOR)
   @ApiOperation({ summary: 'Get cash transaction by ID with IDOR protection' })
   @ApiResponse({ status: 200, description: 'Transaction retrieved successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden - Access denied' })
@@ -97,22 +102,22 @@ export class CashController {
     @Request() req: { user: RequestUser }
   ) {
     const transaction = await this.cashService.getCashTransaction(id);
-    
-    // 🔒 IDOR Protection: Проверяем права доступа
-    // Админ может видеть все транзакции
-    if (req.user.role === UserRole.ADMIN || req.user.role === UserRole.CALLCENTRE_ADMIN) {
+
+    if (req.user.role === UserRole.ADMIN) {
       return transaction;
     }
 
-    // Директор может видеть только транзакции из своих городов
     if (req.user.role === UserRole.DIRECTOR) {
-      if (req.user.cities && req.user.cities.length > 0 && !req.user.cities.includes(transaction.data.city)) {
+      if (
+        req.user.cityIds &&
+        req.user.cityIds.length > 0 &&
+        !req.user.cityIds.includes(transaction.data.cityId)
+      ) {
         throw new ForbiddenException('У вас нет доступа к этой транзакции');
       }
       return transaction;
     }
 
-    // Мастер и оператор могут видеть только свои транзакции
     if (transaction.data.nameCreate !== req.user.name) {
       throw new ForbiddenException('У вас нет доступа к этой транзакции');
     }
@@ -123,21 +128,19 @@ export class CashController {
   @Post()
   @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.MASTER, UserRole.OPERATOR, UserRole.CALLCENTRE_OPERATOR, UserRole.CALLCENTRE_ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.MASTER, UserRole.OPERATOR)
   @ApiOperation({ summary: 'Create cash transaction with validation' })
   @ApiResponse({ status: 201, description: 'Transaction created successfully' })
   @ApiResponse({ status: 400, description: 'Bad Request - Validation failed' })
-  @ApiResponse({ status: 409, description: 'Conflict - Duplicate payment purpose' })
   async createCash(
     @Body() dto: CreateCashDto,
     @Request() req: { user: RequestUser; headers: any },
     @Ip() ip: string
   ) {
     const result = await this.cashService.createCash(dto, req.user);
-    
-    // 🔧 OPTIMIZED: Логируем асинхронно без await для ускорения ответа
+
     const userAgent = req.headers['user-agent'] || 'Unknown';
-    const auditPromise = dto.name === 'приход'
+    const auditPromise = dto.type === 'income'
       ? this.auditService.logCashIncome(
           result.data.id,
           req.user.userId,
@@ -146,7 +149,7 @@ export class CashController {
           ip,
           userAgent,
           dto.amount.toString(),
-          dto.city || 'Unknown'
+          String(dto.cityId ?? '')
         )
       : this.auditService.logCashExpense(
           result.data.id,
@@ -156,18 +159,18 @@ export class CashController {
           ip,
           userAgent,
           dto.amount.toString(),
-          dto.city || 'Unknown'
+          String(dto.cityId ?? '')
         );
-    
+
     auditPromise.catch(err => console.error('Audit log failed:', err.message));
-    
+
     return result;
   }
 
   @Put(':id')
   @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.MASTER, UserRole.CALLCENTRE_ADMIN, UserRole.CALLCENTRE_OPERATOR, UserRole.OPERATOR)
+  @Roles(UserRole.ADMIN, UserRole.DIRECTOR, UserRole.MASTER, UserRole.OPERATOR)
   @ApiOperation({ summary: 'Update cash transaction with IDOR protection' })
   @ApiResponse({ status: 200, description: 'Transaction updated successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden - Access denied' })
@@ -207,7 +210,7 @@ export class CashController {
   @Delete(':id')
   @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN, UserRole.CALLCENTRE_OPERATOR, UserRole.OPERATOR)
+  @Roles(UserRole.ADMIN, UserRole.OPERATOR)
   @ApiOperation({ summary: 'Delete cash transaction with IDOR protection' })
   @ApiResponse({ status: 200, description: 'Transaction deleted successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden - Access denied' })

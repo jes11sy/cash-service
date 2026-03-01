@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - dev
 
 jobs:
   build-and-push:
@@ -36,8 +37,9 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/cash-service:latest
-            ${{ secrets.DOCKER_USERNAME }}/cash-service:${{ github.sha }}
+            ${{ secrets.DOCKER_USERNAME }}/cash-service:${{ github.ref_name }}
+            ${{ secrets.DOCKER_USERNAME }}/cash-service:${{ github.ref_name }}-${{ github.sha }}
+            ${{ github.ref_name == 'main' && format('{0}/cash-service:latest', secrets.DOCKER_USERNAME) || '' }}
           cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/cash-service:buildcache
           cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/cash-service:buildcache,mode=max
 

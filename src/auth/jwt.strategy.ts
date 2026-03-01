@@ -29,19 +29,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     // 🔍 DEBUG: Логируем payload для отладки
-    console.log('🔍 [JwtStrategy] Validating payload:', {
-      userId: payload.sub,
-      role: payload.role,
-      roleType: typeof payload.role,
-      cities: payload.cities,
-    });
-
     return {
       userId: payload.sub,
       login: payload.login,
-      role: payload.role as any, // Приводим к any, т.к. из JWT всегда приходит строка
+      role: payload.role as any,
       name: payload.name,
-      cities: payload.cities || [],
+      cityIds: payload.cityIds || [],
     };
   }
 }

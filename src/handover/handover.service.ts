@@ -12,64 +12,56 @@ export class HandoverService {
   async getMasterCashSubmissions(query: GetHandoverQueryDto, user: RequestUser) {
     const { status, page = 1, limit = 50 } = query;
 
-    // Получаем ID мастера из JWT токена
     const masterId = user?.userId;
-    
+
     if (!masterId) {
       throw new ForbiddenException('Master ID not found in token');
     }
 
-    const where: any = {
-      masterId,
-      statusOrder: 'Готово',
+    const cashSubmissionWhere: any = {
+      order: {
+        masterId,
+      },
     };
 
-    // Фильтр по статусу сдачи
     if (status && status !== 'all') {
-      where.cashSubmissionStatus = status;
-    } else {
-      // Показываем только русские статусы, исключаем not_submitted и null
-      where.cashSubmissionStatus = { in: ['Не отправлено', 'На проверке', 'Одобрено', 'Отклонено'] };
+      cashSubmissionWhere.status = status;
     }
 
-    // Пагинация
     const skip = (page - 1) * limit;
 
     try {
-      // 🔧 OPTIMIZED: Убран include master - имя мастера уже есть в JWT токене (user.name)
-      // Это устраняет N+1 проблему и уменьшает нагрузку на БД
-      const [orders, total] = await Promise.all([
-        this.prisma.order.findMany({
-          where,
-          select: {
-            id: true,
-            rk: true,
-            city: true,
-            phone: true,
-            clientName: true,
-            address: true,
-            result: true,
-            expenditure: true,
-            clean: true,
-            masterChange: true,
-            closingData: true,
-            cashSubmissionStatus: true,
-            cashSubmissionDate: true,
-            cashSubmissionAmount: true,
-            cashReceiptDoc: true,
+      const [submissions, total] = await Promise.all([
+        this.prisma.cashSubmission.findMany({
+          where: cashSubmissionWhere,
+          include: {
+            order: {
+              select: {
+                id: true,
+                cityId: true,
+                phone: true,
+                clientName: true,
+                address: true,
+                result: true,
+                expenditure: true,
+                clean: true,
+                masterChange: true,
+                closingAt: true,
+              },
+            },
           },
-          orderBy: { closingData: 'desc' },
+          orderBy: { submittedAt: 'desc' },
           skip,
           take: limit,
         }),
-        this.prisma.order.count({ where }),
+        this.prisma.cashSubmission.count({ where: cashSubmissionWhere }),
       ]);
 
-      this.logger.log(`Master ${masterId} fetched ${orders.length} cash submissions`);
+      this.logger.log(`Master ${masterId} fetched ${submissions.length} cash submissions`);
 
       return {
         success: true,
-        data: orders,
+        data: submissions,
         pagination: {
           page,
           limit,

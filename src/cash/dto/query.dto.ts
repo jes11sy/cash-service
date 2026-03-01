@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsIn, IsInt, Min, Max, MaxLength, IsDateString } from 'class-validator';
+import { IsOptional, IsString, IsIn, IsInt, Min, Max, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -8,33 +8,22 @@ import { ApiProperty } from '@nestjs/swagger';
 export class GetCashQueryDto {
   @ApiProperty({ 
     required: false, 
-    enum: ['приход', 'расход'],
+    enum: ['income', 'expense'],
     description: 'Тип транзакции' 
   })
   @IsOptional()
   @IsString()
-  @IsIn(['приход', 'расход'])
+  @IsIn(['income', 'expense'])
   type?: string;
 
   @ApiProperty({ 
     required: false,
-    description: 'Название (для обратной совместимости)',
-    enum: ['приход', 'расход']
+    description: 'ID города из references_service'
   })
   @IsOptional()
-  @IsString()
-  @IsIn(['приход', 'расход'])
-  name?: string;
-
-  @ApiProperty({ 
-    required: false,
-    example: 'Москва',
-    description: 'Город' 
-  })
-  @IsOptional()
-  @IsString()
-  @MaxLength(100, { message: 'Название города не может быть длиннее 100 символов' })
-  city?: string;
+  @Type(() => Number)
+  @IsInt()
+  cityId?: number;
 
   @ApiProperty({ 
     required: false,
@@ -97,13 +86,13 @@ export class GetCashQueryDto {
 export class GetHandoverQueryDto {
   @ApiProperty({ 
     required: false,
-    enum: ['all', 'Не отправлено', 'На проверке', 'Одобрено', 'Отклонено'],
+    enum: ['all', 'pending', 'under_review', 'approved', 'rejected'],
     default: 'all',
     description: 'Статус сдачи денег' 
   })
   @IsOptional()
   @IsString()
-  @IsIn(['all', 'Не отправлено', 'На проверке', 'Одобрено', 'Отклонено'])
+  @IsIn(['all', 'pending', 'under_review', 'approved', 'rejected'])
   status?: string;
 
   @ApiProperty({ 

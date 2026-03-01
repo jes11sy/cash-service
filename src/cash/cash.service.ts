@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCashDto, UpdateCashDto, ApproveCashDto } from './dto/cash.dto';
 import { GetCashQueryDto } from './dto/query.dto';
@@ -13,7 +13,8 @@ export interface CashStats {
 }
 
 export interface CityStats {
-  city: string;
+  cityId: number;
+  cityName: string;
   income: number;
   expenses: number;
   balance: number;
@@ -26,69 +27,52 @@ export class CashService {
   constructor(private prisma: PrismaService) {}
 
   async getCashTransactions(query: GetCashQueryDto, user: RequestUser) {
-    const { name, city, type, paymentPurpose, startDate, endDate, page = 1, limit = 50 } = query;
+    const { cityId, type, paymentPurpose, startDate, endDate, page = 1, limit = 50 } = query;
 
     const where: any = {};
 
-    // Фильтрация по типу транзакции (приход/расход) через параметр type
     if (type) {
-      where.name = type;
+      where.type = type;
     }
 
-    // Фильтрация по названию (для обратной совместимости)
-    if (name) {
-      where.name = name;
-    }
-
-    // Фильтрация по назначению платежа (например, 'Штраф')
     if (paymentPurpose) {
       where.paymentPurpose = paymentPurpose;
     }
 
-    // 🔧 FIX: Добавлена фильтрация по дате
     if (startDate || endDate) {
-      where.dateCreate = {};
+      where.createdAt = {};
       if (startDate) {
-        where.dateCreate.gte = new Date(startDate);
+        where.createdAt.gte = new Date(startDate);
       }
       if (endDate) {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
-        where.dateCreate.lte = end;
+        where.createdAt.lte = end;
       }
     }
 
-    // Фильтрация по городам пользователя (для директоров и не-админов)
-    if (user.role !== 'admin' && user.cities && user.cities.length > 0) {
-      // Если передан параметр city, проверяем, что он входит в список городов пользователя
-      if (city) {
-        if (user.cities.includes(city)) {
-          where.city = city;
+    if (user.role !== 'admin' && user.cityIds && user.cityIds.length > 0) {
+      if (cityId) {
+        if (user.cityIds.includes(cityId)) {
+          where.cityId = cityId;
         } else {
-          // Если пользователь пытается получить данные не из своего города - возвращаем пустой результат
-          where.city = null;
+          where.cityId = -1;
         }
       } else {
-        // Если city не передан, показываем все города пользователя
-        where.city = {
-          in: user.cities
-        };
+        where.cityId = { in: user.cityIds };
       }
-    } else if (city) {
-      // Для админов - просто применяем фильтр по городу если он передан
-      where.city = city;
+    } else if (cityId) {
+      where.cityId = cityId;
     }
 
-    // Пагинация
     const skip = (page - 1) * limit;
 
-    // 🔧 FIX: Используем executeWithRetry для автоматического переподключения при stale connection
-    // Это решает проблему 502 ошибок после простоя
     return this.prisma.executeWithRetry(async () => {
       const [transactions, total] = await Promise.all([
         this.prisma.cash.findMany({
           where,
-          orderBy: { dateCreate: 'desc' },
+          include: { city: true },
+          orderBy: { createdAt: 'desc' },
           skip,
           take: limit,
         }),
@@ -113,6 +97,7 @@ export class CashService {
   async getCashTransaction(id: number) {
     const transaction = await this.prisma.cash.findUnique({
       where: { id },
+      include: { city: true },
     });
 
     if (!transaction) {
@@ -126,40 +111,42 @@ export class CashService {
   }
 
   async createCash(dto: CreateCashDto, user: RequestUser) {
-    // Валидация суммы на уровне сервиса (дополнительная проверка)
     if (dto.amount <= 0 || dto.amount > 9999999.99) {
       throw new BadRequestException('Недопустимая сумма транзакции');
     }
 
-    // Проверка прав доступа к городу (для не-админов)
-    const city = dto.city || 'Москва';
-    if (user.role !== 'admin' && user.cities && user.cities.length > 0) {
-      if (!user.cities.includes(city)) {
-        throw new ForbiddenException(`У вас нет доступа к городу ${city}`);
+    if (dto.cityId && user.role !== 'admin' && user.cityIds && user.cityIds.length > 0) {
+      if (!user.cityIds.includes(dto.cityId)) {
+        throw new ForbiddenException(`У вас нет доступа к данному городу`);
       }
     }
 
+    const cityId = dto.cityId ?? (user.cityIds?.[0] ?? null);
+
+    if (!cityId) {
+      throw new BadRequestException('Необходимо указать cityId');
+    }
+
     try {
-      // Создаем новую запись (без проверки дубликатов - разрешаем множественные транзакции)
       const result = await this.prisma.$transaction(async (tx) => {
         const transaction = await tx.cash.create({
           data: {
-            name: dto.name,
+            type: dto.type,
             amount: dto.amount,
-            city,
+            cityId,
             note: dto.note,
-            receiptDoc: dto.receiptDoc,
-            receiptDocs: dto.receiptDocs || [], // Массив чеков для расходов
+            receiptDocs: dto.receiptDocs || [],
             paymentPurpose: dto.paymentPurpose,
             nameCreate: user.name,
           },
+          include: { city: true },
         });
 
         return transaction;
       });
 
       this.logger.log(
-        `User ${user.userId} (${user.name}) created cash transaction: ${dto.name} ${dto.amount} RUB`
+        `User ${user.userId} (${user.name}) created cash transaction: ${dto.type} ${dto.amount} RUB`
       );
 
       return {
@@ -168,7 +155,6 @@ export class CashService {
         data: result,
       };
     } catch (error) {
-      // Логируем ошибку с деталями (но без чувствительных данных)
       this.logger.error(
         `Failed to create cash transaction for user ${user.userId}: ${error.message}`,
         error.stack
@@ -177,12 +163,7 @@ export class CashService {
     }
   }
 
-  /**
-   * 🔧 OPTIMIZED: Обновление транзакции с проверкой прав
-   * Принимает опциональный existingTransaction чтобы избежать двойного запроса к БД
-   */
   async updateCash(id: number, dto: UpdateCashDto, user: RequestUser, existingTransaction?: any) {
-    // Используем переданную транзакцию или загружаем из БД
     const transaction = existingTransaction || await this.prisma.cash.findUnique({
       where: { id },
     });
@@ -191,19 +172,15 @@ export class CashService {
       throw new NotFoundException('Cash transaction not found');
     }
 
-    // Проверка прав доступа (для не-админов)
-    if (user.role !== 'admin' && user.cities && user.cities.length > 0) {
-      // Проверяем, что текущий город транзакции доступен пользователю
-      if (!user.cities.includes(transaction.city)) {
+    if (user.role !== 'admin' && user.cityIds && user.cityIds.length > 0) {
+      if (!user.cityIds.includes(transaction.cityId)) {
         throw new ForbiddenException('У вас нет доступа к этой транзакции');
       }
-      // Если меняется город, проверяем, что новый город тоже доступен
-      if (dto.city && !user.cities.includes(dto.city)) {
-        throw new ForbiddenException(`У вас нет доступа к городу ${dto.city}`);
+      if (dto.cityId !== undefined && !user.cityIds.includes(dto.cityId)) {
+        throw new ForbiddenException(`У вас нет доступа к данному городу`);
       }
     }
 
-    // Дополнительная валидация суммы
     if (dto.amount !== undefined && (dto.amount <= 0 || dto.amount > 9999999.99)) {
       throw new BadRequestException('Недопустимая сумма транзакции');
     }
@@ -213,13 +190,13 @@ export class CashService {
         where: { id },
         data: {
           ...(dto.amount !== undefined && { amount: dto.amount }),
-          ...(dto.name && { name: dto.name }),
-          ...(dto.city && { city: dto.city }),
+          ...(dto.type && { type: dto.type }),
+          ...(dto.cityId !== undefined && { cityId: dto.cityId }),
           ...(dto.note !== undefined && { note: dto.note }),
-          ...(dto.receiptDoc && { receiptDoc: dto.receiptDoc }),
-          ...(dto.receiptDocs !== undefined && { receiptDocs: dto.receiptDocs }), // Массив чеков
+          ...(dto.receiptDocs !== undefined && { receiptDocs: dto.receiptDocs }),
           ...(dto.paymentPurpose && { paymentPurpose: dto.paymentPurpose }),
         },
+        include: { city: true },
       });
 
       this.logger.log(
@@ -240,12 +217,7 @@ export class CashService {
     }
   }
 
-  /**
-   * 🔧 OPTIMIZED: Удаление транзакции
-   * Принимает опциональный existingTransaction чтобы избежать двойного запроса к БД
-   */
   async deleteCash(id: number, existingTransaction?: any) {
-    // Используем переданную транзакцию или проверяем существование
     if (!existingTransaction) {
       const transaction = await this.prisma.cash.findUnique({
         where: { id },
@@ -276,34 +248,22 @@ export class CashService {
     }
   }
 
-  /**
-   * 🔧 FIX: Получить статистику кассы через SQL агрегацию
-   * Это намного быстрее чем загрузка 10000 записей и подсчет на клиенте
-   * 
-   * Фильтры:
-   * - city: фильтр по городу
-   * - type: 'приход' или 'расход' (опционально)
-   * - startDate/endDate: фильтр по дате
-   */
   async getCashStats(
     user: RequestUser,
     filters?: {
-      city?: string;
-      type?: 'приход' | 'расход';
+      cityId?: number;
+      type?: 'income' | 'expense';
       startDate?: string;
       endDate?: string;
     }
   ): Promise<{ success: true; data: CashStats }> {
-    // Базовые условия фильтрации
     const where: any = {};
 
-    // Фильтрация по городам пользователя (для директоров и не-админов)
-    if (user.role !== 'admin' && user.cities && user.cities.length > 0) {
-      if (filters?.city) {
-        if (user.cities.includes(filters.city)) {
-          where.city = filters.city;
+    if (user.role !== 'admin' && user.cityIds && user.cityIds.length > 0) {
+      if (filters?.cityId) {
+        if (user.cityIds.includes(filters.cityId)) {
+          where.cityId = filters.cityId;
         } else {
-          // Пользователь запрашивает не свой город - возвращаем нули
           return {
             success: true,
             data: {
@@ -316,47 +276,42 @@ export class CashService {
           };
         }
       } else {
-        where.city = { in: user.cities };
+        where.cityId = { in: user.cityIds };
       }
-    } else if (filters?.city) {
-      where.city = filters.city;
+    } else if (filters?.cityId) {
+      where.cityId = filters.cityId;
     }
 
-    // Фильтр по дате
     if (filters?.startDate || filters?.endDate) {
-      where.dateCreate = {};
+      where.createdAt = {};
       if (filters.startDate) {
-        where.dateCreate.gte = new Date(filters.startDate);
+        where.createdAt.gte = new Date(filters.startDate);
       }
       if (filters.endDate) {
         const endDate = new Date(filters.endDate);
         endDate.setHours(23, 59, 59, 999);
-        where.dateCreate.lte = endDate;
+        where.createdAt.lte = endDate;
       }
     }
 
-    // 🔧 FIX: Используем executeWithRetry для автоматического переподключения при stale connection
-    // Это решает проблему 502 ошибок после простоя
     return this.prisma.executeWithRetry(async () => {
-      // 🔧 OPTIMIZED: Используем один groupBy запрос вместо двух aggregate
       const groupedStats = await this.prisma.cash.groupBy({
-        by: ['name'],
+        by: ['type'],
         where,
         _sum: { amount: true },
         _count: { id: true },
       });
 
-      // Преобразуем результат groupBy в удобный формат
       let totalIncome = 0;
       let totalExpense = 0;
       let incomeCount = 0;
       let expenseCount = 0;
 
       for (const stat of groupedStats) {
-        if (stat.name === 'приход') {
+        if (stat.type === 'income') {
           totalIncome = Number(stat._sum.amount || 0);
           incomeCount = stat._count.id;
-        } else if (stat.name === 'расход') {
+        } else if (stat.type === 'expense') {
           totalExpense = Number(stat._sum.amount || 0);
           expenseCount = stat._count.id;
         }
@@ -379,13 +334,6 @@ export class CashService {
     });
   }
 
-  /**
-   * 🔧 FIX: Получить статистику кассы сгруппированную по городам
-   * Используется в админке вместо загрузки всех транзакций
-   * 
-   * Фильтры:
-   * - startDate/endDate: фильтр по дате
-   */
   async getCashStatsByCity(
     user: RequestUser,
     filters?: {
@@ -393,76 +341,85 @@ export class CashService {
       endDate?: string;
     }
   ): Promise<{ success: true; data: { cities: CityStats[]; totals: CashStats } }> {
-    // Базовые условия фильтрации
     const where: any = {};
 
-    // Фильтрация по городам пользователя (для директоров и не-админов)
-    if (user.role !== 'admin' && user.cities && user.cities.length > 0) {
-      where.city = { in: user.cities };
+    if (user.role !== 'admin' && user.cityIds && user.cityIds.length > 0) {
+      where.cityId = { in: user.cityIds };
     }
 
-    // Фильтр по дате
     if (filters?.startDate || filters?.endDate) {
-      where.dateCreate = {};
+      where.createdAt = {};
       if (filters.startDate) {
-        where.dateCreate.gte = new Date(filters.startDate);
+        where.createdAt.gte = new Date(filters.startDate);
       }
       if (filters.endDate) {
         const endDate = new Date(filters.endDate);
         endDate.setHours(23, 59, 59, 999);
-        where.dateCreate.lte = endDate;
+        where.createdAt.lte = endDate;
       }
     }
 
     return this.prisma.executeWithRetry(async () => {
-      // Группируем по городу и типу транзакции
       const groupedStats = await this.prisma.cash.groupBy({
-        by: ['city', 'name'],
+        by: ['cityId', 'type'],
         where,
         _sum: { amount: true },
         _count: { id: true },
       });
 
-      // Преобразуем результат в удобный формат по городам
-      const cityMap = new Map<string, CityStats>();
+      const cityIds = [...new Set(groupedStats.map((s) => s.cityId))];
+      const cities = await this.prisma.city.findMany({
+        where: { id: { in: cityIds } },
+        select: { id: true, name: true },
+      });
+      const cityNameMap = new Map(cities.map((c) => [c.id, c.name]));
+
+      const cityMap = new Map<number, CityStats>();
       let totalIncome = 0;
       let totalExpense = 0;
       let incomeCount = 0;
       let expenseCount = 0;
 
       for (const stat of groupedStats) {
-        const city = stat.city || 'Не указан';
-        if (!cityMap.has(city)) {
-          cityMap.set(city, { city, income: 0, expenses: 0, balance: 0 });
+        const id = stat.cityId;
+        if (!cityMap.has(id)) {
+          cityMap.set(id, {
+            cityId: id,
+            cityName: cityNameMap.get(id) ?? String(id),
+            income: 0,
+            expenses: 0,
+            balance: 0,
+          });
         }
 
-        const cityData = cityMap.get(city)!;
+        const cityData = cityMap.get(id)!;
         const amount = Number(stat._sum.amount || 0);
 
-        if (stat.name === 'приход') {
+        if (stat.type === 'income') {
           cityData.income += amount;
           totalIncome += amount;
           incomeCount += stat._count.id;
-        } else if (stat.name === 'расход') {
+        } else if (stat.type === 'expense') {
           cityData.expenses += amount;
           totalExpense += amount;
           expenseCount += stat._count.id;
         }
       }
 
-      // Рассчитываем баланс для каждого города
       for (const cityData of cityMap.values()) {
         cityData.balance = cityData.income - cityData.expenses;
       }
 
-      const cities = Array.from(cityMap.values()).sort((a, b) => a.city.localeCompare(b.city));
+      const citiesResult = Array.from(cityMap.values()).sort((a, b) =>
+        a.cityName.localeCompare(b.cityName)
+      );
 
-      this.logger.log(`User ${user.userId} fetched cash stats by city: ${cities.length} cities`);
+      this.logger.log(`User ${user.userId} fetched cash stats by city: ${citiesResult.length} cities`);
 
       return {
         success: true,
         data: {
-          cities,
+          cities: citiesResult,
           totals: {
             totalIncome,
             totalExpense,
@@ -474,9 +431,4 @@ export class CashService {
       };
     });
   }
-
 }
-
-
-
-

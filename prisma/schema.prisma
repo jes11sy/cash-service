@@ -1,146 +1,180 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  schemas  = ["cash_service", "references_service", "orders_service", "audit_logs", "error_logs"]
 }
 
-// Cash transactions
-model Cash {
-  id             Int      @id @default(autoincrement())
-  name           String   // "приход" или "расход"
-  amount         Decimal  @db.Decimal(10, 2)
-  city           String?  @default("Москва")
-  note           String?
-  receiptDoc     String?  @map("receipt_doc")
-  receiptDocs    String[] @default([]) @map("receipt_docs") // Массив чеков для расходов
-  paymentPurpose String?  @unique @map("payment_purpose") // назначение платежа - уникальное для предотвращения дубликатов
-  dateCreate     DateTime @default(now()) @map("date_create")
-  nameCreate     String   @map("name_create")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+// ─────────────────────────────────────────
+// Schema: references_service (read-only)
+// ─────────────────────────────────────────
 
-  // 🚀 Индексы производительности
-  @@index([name, city]) // Существующий индекс
-  @@index([nameCreate, dateCreate(sort: Desc)]) // Для поиска транзакций пользователя
-  @@index([city, dateCreate(sort: Desc)]) // Для фильтрации по городу с сортировкой
-  @@index([dateCreate(sort: Desc)]) // Для общей сортировки по дате
-  @@index([name, dateCreate(sort: Desc)]) // Для фильтрации по типу с сортировкой
-  @@map("cash")
+model City {
+  id       Int     @id @default(autoincrement())
+  name     String  @unique @db.VarChar(100)
+  code     String  @unique @db.VarChar(20)
+  isActive Boolean @default(true) @map("is_active")
+
+  cashItems Cash[]
+
+  @@schema("references_service")
+  @@map("cities")
 }
 
-model Master {
-  id           Int      @id @default(autoincrement())
-  cities       String[]
-  name         String
-  login        String?  @unique
-  password     String?
-  passportDoc  String?  @map("passport_doc")
-  contractDoc  String?  @map("contract_doc")
-  statusWork   String   @map("status_work")
-  dateCreate   DateTime @default(now()) @map("date_create")
-  note         String?
-  tgId         String?  @map("tg_id")
-  chatId       String?  @map("chat_id")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-  orders       Order[]
-
-  @@map("master")
-}
+// ─────────────────────────────────────────
+// Schema: orders_service (read-only)
+// ─────────────────────────────────────────
 
 model Order {
-  id                    Int                @id @default(autoincrement())
-  rk                    String             @map("rk")
-  city                  String
-  avitoName             String?            @map("avito_name")
-  phone                 String
-  typeOrder             String             @map("type_order")
-  clientName            String             @map("client_name")
-  address               String
-  dateMeeting           DateTime           @map("date_meeting")
-  typeEquipment         String             @map("type_equipment")
-  problem               String
-  callRecord            String?            @map("call_record")
-  statusOrder           String             @map("status_order")
-  masterId              Int?               @map("master_id")
-  result                Decimal?           @db.Decimal(10, 2)
-  expenditure           Decimal?           @db.Decimal(10, 2)
-  clean                 Decimal?           @db.Decimal(10, 2)
-  masterChange          Decimal?           @map("master_change") @db.Decimal(10, 2)
-  bsoDoc                String[]           @default([]) @map("bso_doc")
-  expenditureDoc        String[]           @default([]) @map("expenditure_doc")
-  operatorNameId        Int                @map("operator_name_id")
-  createDate            DateTime           @map("create_date")
-  closingData           DateTime?          @map("closing_data")
-  createdAt             DateTime           @default(now()) @map("created_at")
-  updatedAt             DateTime           @updatedAt @map("updated_at")
-  avitoChatId           String?            @map("avito_chatid")
-  callId                String?            @map("call_id")
-  prepayment            Decimal?           @db.Decimal(10, 2)
-  dateClosmod           DateTime?          @map("date_closmod")
-  comment               String?
-  cashSubmissionStatus  String?            @default("Готово") @map("cash_submission_status")
-  cashSubmissionDate    DateTime?          @map("cash_submission_date")
-  cashSubmissionAmount  Decimal?           @map("cash_submission_amount") @db.Decimal(10, 2)
-  cashReceiptDoc        String?            @map("cash_receipt_doc")
-  cashApprovedBy        Int?               @map("cash_approved_by")
-  cashApprovedDate      DateTime?          @map("cash_approved_date")
-  // ✅ FIX #146: SetNull - заказ остаётся, мастер открепляется
-  master                Master?            @relation(fields: [masterId], references: [id], onDelete: SetNull)
+  id          Int       @id @default(autoincrement())
+  cityId      Int       @map("city_id")
+  masterId    Int?      @map("master_id")
+  statusId    Int       @map("status_id")
+  phone       String    @db.VarChar(20)
+  clientName  String    @map("client_name") @db.VarChar(255)
+  address     String    @db.VarChar(500)
+  result      String?   @db.Text
+  expenditure Decimal?  @db.Decimal(10, 2)
+  clean       Decimal?  @db.Decimal(10, 2)
+  masterChange Decimal? @map("master_change") @db.Decimal(10, 2)
+  closingAt   DateTime? @map("closing_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
 
-  // 🚀 Индексы производительности для handover
-  @@index([masterId, statusOrder]) // Для поиска заказов мастера по статусу
-  @@index([masterId, cashSubmissionStatus]) // Для фильтрации сдач мастера
-  @@index([closingData(sort: Desc)]) // Для сортировки по дате закрытия
-  @@index([masterId, statusOrder, cashSubmissionStatus]) // Комбинированный индекс для handover
-  @@index([statusOrder, closingData(sort: Desc)]) // Для админов
+  cashSubmission CashSubmission?
+
+  @@schema("orders_service")
   @@map("orders")
 }
 
-model AuditLog {
-  id        Int      @id @default(autoincrement())
-  timestamp DateTime @default(now())
-  eventType String   @db.VarChar(100)
-  userId    Int?
-  role      String?  @db.VarChar(50)
-  login     String?  @db.VarChar(255)
-  ip        String   @db.VarChar(45)
-  userAgent String   @db.Text
-  success   Boolean
-  metadata  Json?    @db.JsonB
+/// Сдача кассы по заказам
+model CashSubmission {
+  id          Int       @id @default(autoincrement())
+  orderId     Int       @unique @map("order_id")
+  status      String    @db.VarChar(50)
+  amount      Decimal   @db.Decimal(10, 2)
+  receiptDoc  String?   @map("receipt_doc") @db.VarChar(500)
+  submittedAt DateTime? @map("submitted_at")
+  approvedBy  Int?      @map("approved_by")
+  approvedAt  DateTime? @map("approved_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  @@index([userId, timestamp(sort: Desc)])
-  @@index([eventType, timestamp(sort: Desc)])
-  @@index([timestamp(sort: Desc)])
-  @@map("audit_logs")
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@schema("orders_service")
+  @@map("cash_submissions")
 }
 
-model ErrorLog {
-  id            Int      @id @default(autoincrement())
-  timestamp     DateTime @default(now())
-  service       String   @db.VarChar(100)
-  errorType     String   @map("error_type") @db.VarChar(255)
-  errorMessage  String   @map("error_message") @db.Text
-  stackTrace    String?  @map("stack_trace") @db.Text
-  userId        Int?     @map("user_id")
-  userRole      String?  @map("user_role") @db.VarChar(50)
-  requestUrl    String?  @map("request_url") @db.VarChar(500)
-  requestMethod String?  @map("request_method") @db.VarChar(10)
-  ip            String?  @db.VarChar(45)
-  userAgent     String?  @map("user_agent") @db.Text
-  metadata      Json?    @db.JsonB
+// ─────────────────────────────────────────
+// Schema: cash_service
+// ─────────────────────────────────────────
 
-  @@index([timestamp(sort: Desc)])
-  @@index([service, timestamp(sort: Desc)])
+/// Кассовые операции
+model Cash {
+  id             Int      @id @default(autoincrement())
+  cityId         Int      @map("city_id")      /// FK на cities (references_service)
+  type           String   @db.VarChar(50)      /// Тип (income/expense)
+  amount         Decimal  @db.Decimal(10, 2)   /// Сумма
+  nameCreate     String   @map("name_create") @db.VarChar(255) /// Кто создал
+  paymentPurpose String?  @map("payment_purpose") @db.VarChar(255) /// Назначение платежа
+  note           String?  @db.Text             /// Заметка
+  receiptDocs    String[] @default([]) @map("receipt_docs") /// Массив чеков
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  city City @relation(fields: [cityId], references: [id])
+
+  @@index([cityId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([cityId, createdAt])
+  @@index([cityId, type])
+  @@schema("cash_service")
+  @@map("cash")
+}
+
+/// Начисления зарплаты операторам
+model OperatorSalary {
+  id            Int       @id @default(autoincrement())
+  operatorId    Int       @map("operator_id")             /// FK на operators (auth_service)
+  periodStart   DateTime  @map("period_start") @db.Date   /// Начало периода
+  periodEnd     DateTime  @map("period_end") @db.Date     /// Конец периода
+  ordersCount   Int       @default(0) @map("orders_count")    /// Количество заказов
+  callsCount    Int       @default(0) @map("calls_count")     /// Количество звонков
+  baseAmount    Decimal   @default(0) @map("base_amount") @db.Decimal(10, 2)    /// Базовая часть
+  bonusAmount   Decimal   @default(0) @map("bonus_amount") @db.Decimal(10, 2)   /// Премия
+  penaltyAmount Decimal   @default(0) @map("penalty_amount") @db.Decimal(10, 2) /// Штрафы
+  totalAmount   Decimal   @default(0) @map("total_amount") @db.Decimal(10, 2)   /// Итого
+  status        String    @default("draft") @db.VarChar(50) /// draft/approved/paid
+  approvedBy    Int?      @map("approved_by")              /// FK на directors (auth_service)
+  approvedAt    DateTime? @map("approved_at")              /// Дата подтверждения
+  paidAt        DateTime? @map("paid_at")                  /// Дата выплаты
+  note          String?   @db.Text                        /// Комментарий
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@unique([operatorId, periodStart, periodEnd])
+  @@index([operatorId])
+  @@index([status])
+  @@index([periodStart, periodEnd])
+  @@index([operatorId, status])
+  @@schema("cash_service")
+  @@map("operator_salary")
+}
+
+// ─────────────────────────────────────────
+// Schema: audit_logs
+// ─────────────────────────────────────────
+
+/// Аудит cash-service (кассовые операции)
+model AuditCash {
+  id        Int      @id @default(autoincrement())
+  eventType String   @map("event_type") @db.VarChar(100) /// create/approve/reject
+  userId    Int?     @map("user_id")                    /// ID пользователя
+  role      String?  @db.VarChar(50)                   /// Роль
+  login     String?  @db.VarChar(255)                  /// Логин
+  ip        String   @db.VarChar(45)                   /// IP адрес
+  userAgent String   @map("user_agent") @db.Text       /// User Agent
+  success   Boolean                                    /// Успешно ли действие
+  metadata  Json?    @db.JsonB                         /// Доп. данные (amount, type)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([eventType])
+  @@index([userId])
+  @@index([createdAt])
+  @@index([success])
+  @@index([role, createdAt])
+  @@schema("audit_logs")
+  @@map("audit_cash")
+}
+
+// ─────────────────────────────────────────
+// Schema: error_logs
+// ─────────────────────────────────────────
+
+/// Ошибки cash-service
+model ErrorCash {
+  id            Int      @id @default(autoincrement())
+  errorType     String   @map("error_type") @db.VarChar(255)    /// Тип ошибки
+  errorMessage  String   @map("error_message") @db.Text         /// Сообщение
+  stackTrace    String?  @map("stack_trace") @db.Text           /// Stack trace
+  userId        Int?     @map("user_id")                        /// ID пользователя
+  userRole      String?  @map("user_role") @db.VarChar(50)     /// Роль
+  requestUrl    String?  @map("request_url") @db.VarChar(500)   /// URL запроса
+  requestMethod String?  @map("request_method") @db.VarChar(10) /// HTTP метод
+  ip            String?  @db.VarChar(45)                        /// IP адрес
+  userAgent     String?  @map("user_agent") @db.Text            /// User Agent
+  metadata      Json?    @db.JsonB                              /// Доп. данные
+  createdAt     DateTime @default(now()) @map("created_at")
+
   @@index([errorType])
   @@index([userId])
-  @@map("error_logs")
+  @@index([createdAt])
+  @@index([userRole, createdAt])
+  @@schema("error_logs")
+  @@map("error_cash")
 }
-
-
-
-
-

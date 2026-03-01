@@ -8,7 +8,7 @@ export interface JwtPayload {
   login: string;
   role: UserRole;
   name: string;
-  cities: string[];
+  cityIds: number[];
   iat?: number; // Issued at
   exp?: number; // Expiration time
 }
@@ -21,6 +21,6 @@ export interface RequestUser {
   login: string;
   role: UserRole;
   name: string;
-  cities: string[];
+  cityIds: number[];
 }
 

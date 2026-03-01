@@ -1,13 +1,13 @@
-import { IsString, IsNumber, IsOptional, IsIn, Min, Max, IsPositive, MaxLength, Matches, ValidateIf, IsArray, ArrayMaxSize } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsIn, Min, Max, IsPositive, MaxLength, IsArray, ArrayMaxSize, IsInt } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { SanitizeString, SanitizeStringSoft } from '../../utils/sanitize';
+import { SanitizeStringSoft } from '../../utils/sanitize';
 
 export class CreateCashDto {
-  @ApiProperty({ enum: ['приход', 'расход'] })
+  @ApiProperty({ enum: ['income', 'expense'] })
   @IsString()
-  @IsIn(['приход', 'расход'])
-  name: string;
+  @IsIn(['income', 'expense'])
+  type: string;
 
   @ApiProperty({ 
     example: 1000.50,
@@ -22,35 +22,23 @@ export class CreateCashDto {
   @Max(9999999.99, { message: 'Максимальная сумма: 9,999,999.99' })
   amount: number;
 
-  @ApiProperty({ required: false })
-  @IsString()
+  @ApiProperty({ required: false, description: 'ID города из references_service' })
   @IsOptional()
-  @SanitizeString()
-  city?: string;
+  @Type(() => Number)
+  @IsInt()
+  cityId?: number;
 
   @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
-  @SanitizeStringSoft() // 🔒 Мягкая санитизация для заметок
+  @SanitizeStringSoft()
   @MaxLength(2000, { message: 'Заметка не может быть длиннее 2000 символов' })
   note?: string;
 
   @ApiProperty({ 
     required: false,
-    example: 'director/cash/receipt_doc/uuid-v4.pdf',
-    description: 'S3 ключ или URL документа/чека (PDF/JPG/PNG)'
-  })
-  @IsOptional()
-  @IsString()
-  @MaxLength(500, { message: 'Путь не может быть длиннее 500 символов' })
-  @ValidateIf((o) => o.receiptDoc !== '' && o.receiptDoc !== undefined) // 🔧 FIX: Позволяет пустую строку
-  @Matches(/\.(pdf|jpg|jpeg|png)$/i, { message: 'Разрешены только файлы: PDF, JPG, PNG' })
-  receiptDoc?: string;
-
-  @ApiProperty({ 
-    required: false,
     example: ['director/cash/receipt_doc/uuid1.pdf', 'director/cash/receipt_doc/uuid2.jpg'],
-    description: 'Массив S3 ключей чеков для расходов (максимум 10 файлов)'
+    description: 'Массив S3 ключей чеков (максимум 10 файлов)'
   })
   @IsOptional()
   @IsArray({ message: 'receiptDocs должен быть массивом' })
@@ -59,10 +47,10 @@ export class CreateCashDto {
   @MaxLength(500, { each: true, message: 'Путь не может быть длиннее 500 символов' })
   receiptDocs?: string[];
 
-  @ApiProperty({ required: false, description: 'Назначение платежа (уникальный идентификатор заказа)' })
+  @ApiProperty({ required: false, description: 'Назначение платежа' })
   @IsString()
   @IsOptional()
-  @SanitizeString() // 🔒 XSS защита
+  @SanitizeStringSoft()
   @MaxLength(200)
   paymentPurpose?: string;
 }
@@ -82,40 +70,29 @@ export class UpdateCashDto {
   @Max(9999999.99, { message: 'Максимальная сумма: 9,999,999.99' })
   amount?: number;
 
-  @ApiProperty({ required: false, enum: ['приход', 'расход'] })
+  @ApiProperty({ required: false, enum: ['income', 'expense'] })
   @IsString()
   @IsOptional()
-  @IsIn(['приход', 'расход']) // 🔧 FIX: Добавлена валидация значений
-  name?: string;
+  @IsIn(['income', 'expense'])
+  type?: string;
+
+  @ApiProperty({ required: false, description: 'ID города из references_service' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  cityId?: number;
 
   @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
-  @SanitizeString() // 🔒 XSS защита
-  city?: string;
-
-  @ApiProperty({ required: false })
-  @IsString()
-  @IsOptional()
-  @SanitizeStringSoft() // 🔒 Мягкая санитизация для заметок
+  @SanitizeStringSoft()
   @MaxLength(2000)
   note?: string;
 
   @ApiProperty({ 
     required: false,
-    example: 'director/cash/receipt_doc/uuid-v4.pdf'
-  })
-  @IsOptional()
-  @IsString()
-  @MaxLength(500)
-  @ValidateIf((o) => o.receiptDoc !== '' && o.receiptDoc !== undefined) // 🔧 FIX: Позволяет пустую строку
-  @Matches(/\.(pdf|jpg|jpeg|png)$/i, { message: 'Разрешены только файлы: PDF, JPG, PNG' })
-  receiptDoc?: string;
-
-  @ApiProperty({ 
-    required: false,
     example: ['director/cash/receipt_doc/uuid1.pdf', 'director/cash/receipt_doc/uuid2.jpg'],
-    description: 'Массив S3 ключей чеков для расходов (максимум 10 файлов)'
+    description: 'Массив S3 ключей чеков (максимум 10 файлов)'
   })
   @IsOptional()
   @IsArray({ message: 'receiptDocs должен быть массивом' })
@@ -127,7 +104,7 @@ export class UpdateCashDto {
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
-  @SanitizeString() // 🔒 XSS защита
+  @SanitizeStringSoft()
   @MaxLength(200)
   paymentPurpose?: string;
 }
@@ -141,21 +118,7 @@ export class ApproveCashDto {
   @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
-  @SanitizeStringSoft() // 🔒 Мягкая санитизация для заметок
+  @SanitizeStringSoft()
   @MaxLength(1000)
   note?: string;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
