@@ -24,9 +24,8 @@ export class AuditService {
    */
   async log(entry: AuditLogEntry): Promise<void> {
     try {
-      await this.prisma.auditLog.create({
+      await this.prisma.auditCash.create({
         data: {
-          timestamp: entry.timestamp ? new Date(entry.timestamp) : new Date(),
           eventType: entry.eventType,
           userId: entry.userId,
           role: entry.role,

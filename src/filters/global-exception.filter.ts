@@ -70,9 +70,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     if (status >= 500) {
       try {
         // 🔒 SECURITY: Фильтруем чувствительные данные перед логированием
-        await this.prisma.errorLog.create({
+        await this.prisma.errorCash.create({
           data: {
-            service: 'cash-service',
             errorType,
             errorMessage,
             stackTrace,
